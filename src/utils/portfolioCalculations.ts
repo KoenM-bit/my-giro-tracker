@@ -53,10 +53,13 @@ export const calculatePortfolioOverTime = (transactions: DeGiroTransaction[]): P
     runningTotal += transaction.totaal;
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
     
-    snapshots.push({
-      date,
-      value: runningTotal,
-    });
+    // Only add valid dates
+    if (!isNaN(date.getTime())) {
+      snapshots.push({
+        date,
+        value: runningTotal,
+      });
+    }
   });
 
   return snapshots;
@@ -79,27 +82,27 @@ export const filterTransactionsByTimeframe = (
     case '1D':
       return transactions.filter(t => {
         const date = getDateFromTransaction(t);
-        return (now.getTime() - date.getTime()) <= 24 * 60 * 60 * 1000;
+        return !isNaN(date.getTime()) && (now.getTime() - date.getTime()) <= 24 * 60 * 60 * 1000;
       });
     case '1W':
       return transactions.filter(t => {
         const date = getDateFromTransaction(t);
-        return (now.getTime() - date.getTime()) <= 7 * 24 * 60 * 60 * 1000;
+        return !isNaN(date.getTime()) && (now.getTime() - date.getTime()) <= 7 * 24 * 60 * 60 * 1000;
       });
     case '1M':
       return transactions.filter(t => {
         const date = getDateFromTransaction(t);
-        return (now.getTime() - date.getTime()) <= 30 * 24 * 60 * 60 * 1000;
+        return !isNaN(date.getTime()) && (now.getTime() - date.getTime()) <= 30 * 24 * 60 * 60 * 1000;
       });
     case '3M':
       return transactions.filter(t => {
         const date = getDateFromTransaction(t);
-        return (now.getTime() - date.getTime()) <= 90 * 24 * 60 * 60 * 1000;
+        return !isNaN(date.getTime()) && (now.getTime() - date.getTime()) <= 90 * 24 * 60 * 60 * 1000;
       });
     case '1Y':
       return transactions.filter(t => {
         const date = getDateFromTransaction(t);
-        return (now.getTime() - date.getTime()) <= 365 * 24 * 60 * 60 * 1000;
+        return !isNaN(date.getTime()) && (now.getTime() - date.getTime()) <= 365 * 24 * 60 * 60 * 1000;
       });
     case 'ALL':
     default:

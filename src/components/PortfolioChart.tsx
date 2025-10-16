@@ -10,15 +10,21 @@ interface PortfolioChartProps {
 
 export const PortfolioChart = ({ data, timeframe }: PortfolioChartProps) => {
   const formatDate = (date: Date) => {
+    // Validate date before formatting
+    if (!date || isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
     if (timeframe === '1D') return format(date, 'HH:mm');
     if (timeframe === '1W' || timeframe === '1M') return format(date, 'dd MMM');
     return format(date, 'dd MMM yyyy');
   };
 
-  const chartData = data.map((snapshot) => ({
-    date: formatDate(snapshot.date),
-    value: snapshot.value,
-  }));
+  const chartData = data
+    .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
+    .map((snapshot) => ({
+      date: formatDate(snapshot.date),
+      value: snapshot.value,
+    }));
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
