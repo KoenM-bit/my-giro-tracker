@@ -62,6 +62,10 @@ export const parseAccountActivityCSV = (file: File): Promise<AccountActivity[]> 
               return parseFloat(value.replace(',', '.').replace(/[^\d.-]/g, ''));
             };
 
+            // Get all keys to find the currency columns (they have empty names)
+            const keys = Object.keys(row);
+            const emptyKeys = keys.filter(k => k === '' || k.startsWith('__parsed_extra'));
+            
             return {
               datum: row.Datum || row.tum || '',
               tijd: row.Tijd || '',
@@ -71,15 +75,17 @@ export const parseAccountActivityCSV = (file: File): Promise<AccountActivity[]> 
               omschrijving: row.Omschrijving || '',
               fx: row.FX || '',
               mutatie: parseNumber(row.Mutatie),
-              mutatieCurrency: row[''] || 'EUR',
+              mutatieCurrency: emptyKeys[0] ? row[emptyKeys[0]] || 'EUR' : 'EUR',
               saldo: parseNumber(row.Saldo),
-              saldoCurrency: row[' '] || 'EUR',
+              saldoCurrency: emptyKeys[1] ? row[emptyKeys[1]] || 'EUR' : 'EUR',
               orderId: row['Order Id'] || '',
             };
           });
 
+          console.log('Parsed account activities:', activities.length, 'Sample:', activities[0]);
           resolve(activities);
         } catch (error) {
+          console.error('Error parsing account activities:', error);
           reject(error);
         }
       },
