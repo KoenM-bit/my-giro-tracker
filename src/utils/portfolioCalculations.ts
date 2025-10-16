@@ -43,15 +43,14 @@ export const calculatePortfolioOverTime = (
   transactions: DeGiroTransaction[],
   accountActivities: AccountActivity[] = []
 ): PortfolioSnapshot[] => {
-  // Track holdings over time to calculate portfolio value properly
-  const holdingsOverTime = new Map<string, { quantity: number; avgPrice: number; isOption: boolean }>();
+  // Track holdings to identify when positions are closed and realize P/L
+  const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
   const snapshots: PortfolioSnapshot[] = [];
-  let realizedCash = 0; // Track realized gains/losses from closed positions
+  let portfolioValue = 0; // Track deposits + realized P/L only
   
-  // Combine transactions and deposits
+  // Combine all events
   const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
   
-  // Add transactions
   transactions.forEach((transaction) => {
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
     if (!isNaN(date.getTime())) {
@@ -59,7 +58,6 @@ export const calculatePortfolioOverTime = (
     }
   });
   
-  // Add deposits/withdrawals
   accountActivities.forEach((activity) => {
     const date = parse(`${activity.datum} ${activity.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
     if (!isNaN(date.getTime()) && activity.omschrijving.toLowerCase().includes('ideal')) {
@@ -67,73 +65,61 @@ export const calculatePortfolioOverTime = (
     }
   });
   
-  // Sort all events by date
   allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
   
   allEvents.forEach((event) => {
     if (event.type === 'deposit') {
-      // Deposits add to realized cash
-      realizedCash += event.data.mutatie;
+      // Deposits add to portfolio value
+      portfolioValue += event.data.mutatie;
     } else {
-      // Transaction
+      // Transaction - only affects portfolio value when position closes (realizes P/L)
       const transaction = event.data as DeGiroTransaction;
       const key = `${transaction.isin}-${transaction.product}`;
-      const isOption = isOptionTransaction(transaction);
-      const existing = holdingsOverTime.get(key);
+      const existing = holdingsMap.get(key);
       
       if (existing) {
         const newQuantity = existing.quantity + transaction.aantal;
+        const transactionCost = Math.abs(transaction.waarde);
         
         if (newQuantity === 0) {
-          // Position closed - realize the gain/loss
-          const totalCost = existing.quantity * existing.avgPrice;
-          const totalSale = -transaction.aantal * Math.abs(transaction.koers);
-          realizedCash += totalSale - Math.abs(totalCost);
-          holdingsOverTime.delete(key);
-        } else if ((existing.quantity > 0 && newQuantity > 0) || (existing.quantity < 0 && newQuantity < 0)) {
-          // Same direction - update average price
-          const totalCost = existing.quantity * existing.avgPrice + transaction.aantal * Math.abs(transaction.koers);
-          holdingsOverTime.set(key, {
-            quantity: newQuantity,
-            avgPrice: Math.abs(totalCost / newQuantity),
-            isOption,
+          // Position fully closed - realize P/L
+          // Realized P/L = what we got out - what we put in
+          const realizedPL = existing.totalCost + transaction.waarde;
+          portfolioValue += realizedPL;
+          holdingsMap.delete(key);
+        } else if (Math.sign(existing.quantity) !== Math.sign(newQuantity) && newQuantity !== 0) {
+          // Partial close - realize P/L on closed portion
+          const closedQuantity = Math.abs(existing.quantity) > Math.abs(transaction.aantal) 
+            ? Math.abs(transaction.aantal) 
+            : Math.abs(existing.quantity);
+          const avgCost = existing.totalCost / Math.abs(existing.quantity);
+          const closedCost = -avgCost * closedQuantity;
+          const closedSale = (transaction.waarde / Math.abs(transaction.aantal)) * closedQuantity;
+          const realizedPL = closedCost + closedSale;
+          portfolioValue += realizedPL;
+          
+          // Update remaining position
+          const remainingQuantity = existing.quantity + transaction.aantal;
+          const remainingCost = existing.totalCost - closedCost;
+          holdingsMap.set(key, {
+            totalCost: remainingCost,
+            quantity: remainingQuantity,
           });
         } else {
-          // Partial close
-          const closedQuantity = existing.quantity > 0 ? Math.min(existing.quantity, -transaction.aantal) : Math.max(existing.quantity, -transaction.aantal);
-          const remainingQuantity = existing.quantity + transaction.aantal;
-          const totalCost = closedQuantity * existing.avgPrice;
-          const totalSale = -closedQuantity * Math.abs(transaction.koers);
-          realizedCash += totalSale - Math.abs(totalCost);
-          
-          if (remainingQuantity !== 0) {
-            holdingsOverTime.set(key, {
-              quantity: remainingQuantity,
-              avgPrice: existing.avgPrice,
-              isOption,
-            });
-          } else {
-            holdingsOverTime.delete(key);
-          }
+          // Adding to position - no realized P/L
+          holdingsMap.set(key, {
+            totalCost: existing.totalCost + transaction.waarde,
+            quantity: newQuantity,
+          });
         }
       } else {
-        // New position
-        holdingsOverTime.set(key, {
+        // New position - no realized P/L
+        holdingsMap.set(key, {
+          totalCost: transaction.waarde,
           quantity: transaction.aantal,
-          avgPrice: Math.abs(transaction.koers),
-          isOption,
         });
       }
     }
-    
-    // Calculate current portfolio value = realized cash + value of current holdings
-    let holdingsValue = 0;
-    holdingsOverTime.forEach((holding) => {
-      // For unrealized holdings, value = cost basis (what we paid)
-      holdingsValue += Math.abs(holding.quantity * holding.avgPrice);
-    });
-    
-    const portfolioValue = realizedCash + holdingsValue;
     
     snapshots.push({
       date: event.date,
