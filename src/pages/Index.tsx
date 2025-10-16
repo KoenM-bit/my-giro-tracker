@@ -261,10 +261,41 @@ const Index = () => {
     try {
       const parsedActivities = await parseAccountActivityCSV(file);
       
-      // Save to database using upsert to prevent duplicates
+      if (parsedActivities.length === 0) {
+        toast.error('No account activities found in CSV file');
+        return;
+      }
+      
+      // Save to database - check for duplicates by comparing with existing data
       if (user) {
-        const { error } = await supabase.from('account_activities').upsert(
-          parsedActivities.map(a => ({
+        // Get all existing account activities for this user
+        const { data: existingActivities, error: fetchError } = await supabase
+          .from('account_activities')
+          .select('datum, tijd, order_id, mutatie, saldo')
+          .eq('user_id', user.id);
+
+        if (fetchError) throw fetchError;
+
+        // Create a Set of fingerprints from existing activities
+        const existingFingerprints = new Set(
+          existingActivities?.map(a => 
+            `${a.datum}|${a.tijd}|${a.order_id}|${a.mutatie}|${a.saldo}`
+          ) || []
+        );
+
+        // Filter out activities that already exist
+        const newActivities = parsedActivities.filter(a => {
+          const fingerprint = `${a.datum}|${a.tijd}|${a.orderId}|${a.mutatie}|${a.saldo}`;
+          return !existingFingerprints.has(fingerprint);
+        });
+
+        if (newActivities.length === 0) {
+          toast.info('No new account activities to import - all already exist in database');
+          return;
+        }
+
+        const { error: insertError } = await supabase.from('account_activities').insert(
+          newActivities.map(a => ({
             user_id: user.id,
             datum: a.datum,
             tijd: a.tijd,
@@ -278,16 +309,12 @@ const Index = () => {
             saldo: a.saldo,
             saldo_currency: a.saldoCurrency,
             order_id: a.orderId,
-          })),
-          {
-            onConflict: 'user_id,order_id,datum,tijd',
-            ignoreDuplicates: true
-          }
+          }))
         );
 
-        if (error) throw error;
+        if (insertError) throw insertError;
         await loadDataFromDatabase(user.id);
-        toast.success(`Successfully imported ${parsedActivities.length} account activities (duplicates skipped)`);
+        toast.success(`Successfully imported ${newActivities.length} new account activities (${parsedActivities.length - newActivities.length} duplicates skipped)`);
       }
     } catch (error) {
       console.error('Error parsing CSV:', error);
