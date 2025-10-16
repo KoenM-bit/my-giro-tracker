@@ -7,7 +7,9 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useState } from 'react';
 import { ScenarioAnalysis } from './ScenarioAnalysis';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, RefreshCw } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface HoldingsTableProps {
   holdings: PortfolioHolding[];
@@ -22,6 +24,7 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
   const [priceInput, setPriceInput] = useState<string>('');
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [scenarioStock, setScenarioStock] = useState<string>('');
+  const [isFetchingPrices, setIsFetchingPrices] = useState(false);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
@@ -76,6 +79,50 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
     setScenarioOpen(true);
   };
 
+  const handleFetchPrices = async () => {
+    setIsFetchingPrices(true);
+    
+    try {
+      // Only fetch for stocks (not options)
+      const stockHoldings = holdings.filter(h => isStock(h.product));
+      
+      if (stockHoldings.length === 0) {
+        toast.info('No stocks to fetch prices for');
+        setIsFetchingPrices(false);
+        return;
+      }
+
+      toast.info(`Fetching prices for ${stockHoldings.length} stocks...`);
+
+      const { data, error } = await supabase.functions.invoke('fetch-stock-prices', {
+        body: {
+          holdings: stockHoldings.map(h => ({
+            isin: h.isin,
+            product: h.product
+          }))
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        const { summary } = data;
+        if (summary.successful > 0) {
+          toast.success(`Updated ${summary.successful} prices successfully!`);
+          // Trigger a page refresh to show new prices
+          window.location.reload();
+        } else {
+          toast.warning('No prices could be fetched');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching prices:', error);
+      toast.error('Failed to fetch prices');
+    } finally {
+      setIsFetchingPrices(false);
+    }
+  };
+
   // Get holdings relevant to the scenario (stock + its options)
   const scenarioHoldings = scenarioStock 
     ? (allHoldings || holdings).filter(h => {
@@ -94,7 +141,19 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Current Holdings</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold">Current Holdings</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleFetchPrices}
+            disabled={isFetchingPrices}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetchingPrices ? 'animate-spin' : ''}`} />
+            {isFetchingPrices ? 'Fetching...' : 'Fetch Prices'}
+          </Button>
+        </div>
         <Badge variant="outline" className="text-xs">
           {holdings.length - excludedHoldings.size} active / {holdings.length} total
         </Badge>
