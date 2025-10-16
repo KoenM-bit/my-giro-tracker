@@ -151,9 +151,10 @@ export const calculateProfitLossByType = (
       
       if (holding.isOption) {
         // For options: if current price available, calculate unrealized P/L
+        // Options have contract size of 100
         // Otherwise use net cash flow
         if (holdingData?.currentPrice !== undefined) {
-          optionsUnrealized += (holdingData.currentPrice - holdingData.averagePrice) * holding.quantity;
+          optionsUnrealized += (holdingData.currentPrice - holdingData.averagePrice) * holding.quantity * 100;
         } else {
           optionsUnrealized += holding.netCashFlow;
         }

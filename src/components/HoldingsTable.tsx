@@ -35,7 +35,10 @@ export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, o
 
   const calculateUnrealizedPL = (holding: PortfolioHolding) => {
     if (holding.currentPrice) {
-      return (holding.currentPrice - holding.averagePrice) * holding.quantity;
+      const basePL = (holding.currentPrice - holding.averagePrice) * holding.quantity;
+      // Options have contract size of 100
+      const isOption = /[CP]\d{2,}/.test(holding.product);
+      return isOption ? basePL * 100 : basePL;
     }
     return null;
   };
