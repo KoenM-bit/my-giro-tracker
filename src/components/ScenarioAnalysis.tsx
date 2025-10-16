@@ -73,9 +73,12 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
   const calculateScenarioValue = (hypotheticalPrice: number) => {
     if (!selectedExpiration) return null;
 
-    let totalValue = 0;
-    let totalCost = 0;
-    const details: Array<{ product: string; value: number; cost: number; pl: number }> = [];
+    let optionsValue = 0;
+    let optionsCost = 0;
+    let stockValue = 0;
+    let stockCurrentValue = 0;
+    const optionDetails: Array<{ product: string; strike: number; type: string; quantity: number; value: number; cost: number; pl: number }> = [];
+    const stockDetails: Array<{ product: string; quantity: number; currentPrice: number; newPrice: number; currentValue: number; newValue: number; change: number }> = [];
 
     holdings.forEach(holding => {
       const isOption = holding.product.match(/(\d{2}[A-Z]{3}\d{2})/);
@@ -98,10 +101,13 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
           }
 
           const cost = holding.totalCost;
-          totalValue += optionValue;
-          totalCost += cost;
-          details.push({
+          optionsValue += optionValue;
+          optionsCost += cost;
+          optionDetails.push({
             product: holding.product,
+            strike: strikePrice,
+            type: optionType,
+            quantity: holding.quantity,
             value: optionValue,
             cost: cost,
             pl: optionValue + cost,
@@ -109,25 +115,36 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
         }
       } else if (!isOption && holding.product.includes(underlyingStock || '')) {
         // This is the underlying stock
-        const stockValue = hypotheticalPrice * holding.quantity;
-        const cost = holding.totalCost;
-        totalValue += stockValue;
-        totalCost += cost;
-        details.push({
+        const newValue = hypotheticalPrice * holding.quantity;
+        const currentValue = (holding.currentPrice || holding.averagePrice) * holding.quantity;
+        stockValue += newValue;
+        stockCurrentValue += currentValue;
+        stockDetails.push({
           product: holding.product,
-          value: stockValue,
-          cost: cost,
-          pl: stockValue + cost,
+          quantity: holding.quantity,
+          currentPrice: holding.currentPrice || holding.averagePrice,
+          newPrice: hypotheticalPrice,
+          currentValue: currentValue,
+          newValue: newValue,
+          change: newValue - currentValue,
         });
       }
     });
 
+    const optionsPL = optionsValue + optionsCost;
+    const stockChange = stockValue - stockCurrentValue;
+    const totalChange = optionsPL + stockChange;
+
     return {
-      totalValue,
-      totalCost,
-      totalPL: totalValue + totalCost,
-      plPercentage: totalCost !== 0 ? ((totalValue + totalCost) / Math.abs(totalCost)) * 100 : 0,
-      details,
+      optionsValue,
+      optionsCost,
+      optionsPL,
+      stockCurrentValue,
+      stockValue,
+      stockChange,
+      totalChange,
+      optionDetails,
+      stockDetails,
     };
   };
 
@@ -202,61 +219,132 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
         </div>
 
         {selectedExpiration && scenarios.length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <h3 className="text-lg font-semibold">Scenarios at {selectedExpiration}</h3>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Stock Price</TableHead>
-                    <TableHead className="text-right">Total Value</TableHead>
-                    <TableHead className="text-right">Total Cost</TableHead>
-                    <TableHead className="text-right">P/L</TableHead>
-                    <TableHead className="text-right">P/L %</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {scenarios.map(scenario => {
-                    const result = calculateScenarioValue(scenario.price);
-                    if (!result) return null;
+            
+            {scenarios.map(scenario => {
+              const result = calculateScenarioValue(scenario.price);
+              if (!result) return null;
 
-                    return (
-                      <TableRow key={scenario.id}>
-                        <TableCell className="font-medium">
-                          {formatCurrency(scenario.price)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(result.totalValue)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(result.totalCost)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={result.totalPL >= 0 ? 'default' : 'destructive'}>
-                            {formatCurrency(result.totalPL)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={result.totalPL >= 0 ? 'default' : 'destructive'}>
-                            {result.plPercentage.toFixed(2)}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeScenario(scenario.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+              return (
+                <Card key={scenario.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Stock Price: {formatCurrency(scenario.price)}</CardTitle>
+                        <CardDescription>Impact on portfolio at expiration</CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeScenario(scenario.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Summary */}
+                    <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Options P/L</p>
+                        <p className={`text-xl font-bold ${result.optionsPL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(result.optionsPL)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Stock Change</p>
+                        <p className={`text-xl font-bold ${result.stockChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(result.stockChange)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Net Change</p>
+                        <p className={`text-xl font-bold ${result.totalChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(result.totalChange)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Options Details */}
+                    {result.optionDetails.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-2">Options at Expiration</h4>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Product</TableHead>
+                                <TableHead className="text-right">Strike</TableHead>
+                                <TableHead className="text-right">Contracts</TableHead>
+                                <TableHead className="text-right">Value at Exp.</TableHead>
+                                <TableHead className="text-right">Cost Basis</TableHead>
+                                <TableHead className="text-right">P/L</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {result.optionDetails.map((opt, idx) => (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-medium">{opt.product}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(opt.strike)}</TableCell>
+                                  <TableCell className="text-right">{opt.quantity}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(opt.value)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(opt.cost)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <Badge variant={opt.pl >= 0 ? 'default' : 'destructive'}>
+                                      {formatCurrency(opt.pl)}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stock Details */}
+                    {result.stockDetails.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-2">Stock Holdings</h4>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Product</TableHead>
+                                <TableHead className="text-right">Quantity</TableHead>
+                                <TableHead className="text-right">Current Price</TableHead>
+                                <TableHead className="text-right">New Price</TableHead>
+                                <TableHead className="text-right">Current Value</TableHead>
+                                <TableHead className="text-right">New Value</TableHead>
+                                <TableHead className="text-right">Change</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {result.stockDetails.map((stock, idx) => (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-medium">{stock.product}</TableCell>
+                                  <TableCell className="text-right">{stock.quantity}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(stock.currentPrice)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(stock.newPrice)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(stock.currentValue)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(stock.newValue)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <Badge variant={stock.change >= 0 ? 'default' : 'destructive'}>
+                                      {formatCurrency(stock.change)}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </CardContent>
