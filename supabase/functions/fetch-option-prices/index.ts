@@ -194,9 +194,7 @@ function matchOptionToHolding(holding: OptionHolding) {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = await req.json();
@@ -216,11 +214,18 @@ serve(async (req) => {
       { product: string; status: "success"; price: number } | { product: string; status: "failed"; reason: string }
     > = [];
 
-    // ✅ helper once, outside loop
+    // --- helpers ---
     function normalizeStrike(strike: string): number {
       return parseFloat(strike.replace(",", "."));
     }
+    function normalizeExpiry(exp: string): string {
+      return exp
+        .toLowerCase()
+        .replace(/\s*\(.*?\)\s*/g, "")
+        .trim();
+    }
 
+    // --- main loop ---
     for (const holding of holdings) {
       const parsed = matchOptionToHolding(holding);
       if (!parsed) {
@@ -228,7 +233,8 @@ serve(async (req) => {
         continue;
       }
 
-      const candidates = scrapedOptions.filter((o) => o.expiry.startsWith(parsed.expiry));
+      const parsedExpiry = normalizeExpiry(parsed.expiry);
+      const candidates = scrapedOptions.filter((o) => normalizeExpiry(o.expiry) === parsedExpiry);
 
       console.log(
         `Looking for: ${parsed.type} ${parsed.strike} ${parsed.expiry} — ${candidates.length} candidates found`,
