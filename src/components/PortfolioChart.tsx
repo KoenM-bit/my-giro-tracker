@@ -18,12 +18,16 @@ interface PortfolioChartProps {
   transactions: DeGiroTransaction[];
   accountActivities: AccountActivity[];
   portfolioSize: number;
+  borrowedAmount: number;
+  totalValue: number;
 }
 
-export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize }: PortfolioChartProps) => {
+export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize, borrowedAmount, totalValue }: PortfolioChartProps) => {
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
+
+  const netPortfolioValue = totalValue - borrowedAmount;
 
   const formatDate = (date: Date) => {
     if (!date || isNaN(date.getTime())) {
@@ -67,19 +71,19 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
     .map((snapshot) => ({
       date: formatDate(snapshot.date),
       value: snapshot.value,
-      percentage: (snapshot.value / portfolioSize) * 100,
+      percentage: (snapshot.value / netPortfolioValue) * 100,
     }));
 
   // Monthly returns data
   const monthlyData = calculateMonthlyReturns(transactions, accountActivities).map(item => ({
     ...item,
-    percentage: (item.realized / portfolioSize) * 100,
+    percentage: (item.realized / netPortfolioValue) * 100,
   }));
 
   // Yearly returns data
   const yearlyData = calculateYearlyReturns(transactions, accountActivities).map(item => ({
     ...item,
-    percentage: (item.realized / portfolioSize) * 100,
+    percentage: (item.realized / netPortfolioValue) * 100,
   }));
 
   // Cumulative returns data - removed as it's redundant with YTD percentage

@@ -417,6 +417,8 @@ const Index = () => {
             transactions={transactions}
             accountActivities={accountActivities}
             portfolioSize={portfolioSize}
+            borrowedAmount={borrowedAmount}
+            totalValue={portfolioValue}
           />
         </div>
 
