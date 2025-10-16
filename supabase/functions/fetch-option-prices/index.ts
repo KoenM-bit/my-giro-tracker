@@ -112,19 +112,21 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
 function matchOptionToHolding(holding: OptionHolding) {
   const product = holding.product.trim();
 
-  // Flexible regex to support both long and short formats
-  const pattern = /(?:AH|AHOLD)\s*(?:DELHAIZE)?\s*([CP]|CALL|PUT)\s*([\d.]+)\s+(\d{1,2})?([A-Z]{3})(\d{2,4})/i;
+  // Matches: AH C35.00 21NOV25 OR AH P38.00 21NOV25 OR AHOLD DELHAIZE CALL 38.00 17-11-2025
+  const pattern = /(?:AH|AHOLD)\s*(?:DELHAIZE)?\s*(C|P|CALL|PUT)\s*([\d.,]+)\s+(\d{1,2})?([A-Z]{3,})?(\d{2,4})/i;
+
   const match = product.match(pattern);
   if (!match) {
     console.warn(`Could not parse option from product: ${product}`);
     return null;
   }
 
-  const [, typeRaw, strikeRaw, , monthText, yearText] = match;
+  const [, typeRaw, strikeRaw, , monthRaw, yearRaw] = match;
   const type = typeRaw.toUpperCase().startsWith("C") ? "Call" : "Put";
-  const strike = strikeRaw.replace(".", ",");
+  const strike = strikeRaw.replace(".", ",").replace(",", ",");
 
-  const months: Record<string, string> = {
+  // Convert month abbreviation → Dutch month name (matching beursduivel)
+  const monthMap: Record<string, string> = {
     JAN: "Januari",
     FEB: "Februari",
     MAR: "Maart",
@@ -139,10 +141,10 @@ function matchOptionToHolding(holding: OptionHolding) {
     DEC: "December",
   };
 
-  const month = months[monthText.toUpperCase()] || monthText;
-  const year = yearText.length === 2 ? `20${yearText}` : yearText;
-  const expiry = `${month} ${year}`;
+  const month = monthRaw && monthMap[monthRaw.toUpperCase()] ? monthMap[monthRaw.toUpperCase()] : monthRaw;
+  const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
 
+  const expiry = `${month} ${year}`;
   return { strike, expiry, type };
 }
 
