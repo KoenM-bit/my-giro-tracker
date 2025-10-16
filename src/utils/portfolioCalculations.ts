@@ -248,12 +248,13 @@ export const calculateProfitLossByType = (
   const optionsPL = optionsRealized;
   const stocksPL = stocksRealized;
   const totalCosts = calculateTotalCosts(transactions);
+  const totalRealizedPL = optionsRealized + stocksRealized;
   
   return {
     optionsPL,
     stocksPL,
     portfolioValue,
-    totalPL: portfolioValue - totalCosts,
+    totalPL: totalRealizedPL - totalCosts,
     optionsRealized,
     optionsUnrealized,
     stocksRealized,
