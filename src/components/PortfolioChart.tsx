@@ -66,25 +66,19 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
     });
 
   // YTD chart data
-  const ytdData = calculateYTDPerformance(transactions, accountActivities)
+  const ytdData = calculateYTDPerformance(transactions, accountActivities, borrowedAmount)
     .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
-    .map((snapshot) => ({
+    .map((snapshot: any) => ({
       date: formatDate(snapshot.date),
       value: snapshot.value,
-      percentage: (snapshot.value / netPortfolioValue) * 100,
+      percentage: snapshot.percentage,
     }));
 
   // Monthly returns data
-  const monthlyData = calculateMonthlyReturns(transactions, accountActivities).map(item => ({
-    ...item,
-    percentage: (item.realized / netPortfolioValue) * 100,
-  }));
+  const monthlyData = calculateMonthlyReturns(transactions, accountActivities, borrowedAmount);
 
   // Yearly returns data
-  const yearlyData = calculateYearlyReturns(transactions, accountActivities).map(item => ({
-    ...item,
-    percentage: (item.realized / netPortfolioValue) * 100,
-  }));
+  const yearlyData = calculateYearlyReturns(transactions, accountActivities, borrowedAmount);
 
   // Cumulative returns data - removed as it's redundant with YTD percentage
 

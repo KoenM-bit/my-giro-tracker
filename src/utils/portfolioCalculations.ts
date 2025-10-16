@@ -307,6 +307,7 @@ export interface MonthlyReturn {
   realized: number;
   unrealized: number;
   total: number;
+  percentage: number;
 }
 
 export interface YearlyReturn {
@@ -314,14 +315,17 @@ export interface YearlyReturn {
   realized: number;
   unrealized: number;
   total: number;
+  percentage: number;
 }
 
 export const calculateYearlyReturns = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  borrowedAmount: number = 0
 ): YearlyReturn[] => {
-  const yearlyMap = new Map<string, { realized: number; deposits: number }>();
+  const yearlyMap = new Map<string, { realized: number; deposits: number; startValue: number }>();
   const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
+  let cumulativeValue = 0;
   
   // Process transactions to calculate yearly realized P/L
   const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
@@ -345,8 +349,14 @@ export const calculateYearlyReturns = (
   allEvents.forEach((event) => {
     const yearKey = format(event.date, 'yyyy');
     
+    // Track start value for each year
+    if (!yearlyMap.has(yearKey)) {
+      yearlyMap.set(yearKey, { realized: 0, deposits: 0, startValue: cumulativeValue });
+    }
+    
     if (event.type === 'deposit') {
-      const existing = yearlyMap.get(yearKey) || { realized: 0, deposits: 0 };
+      const existing = yearlyMap.get(yearKey)!;
+      cumulativeValue += event.data.mutatie;
       yearlyMap.set(yearKey, {
         ...existing,
         deposits: existing.deposits + event.data.mutatie,
@@ -362,7 +372,8 @@ export const calculateYearlyReturns = (
         if (newQuantity === 0) {
           // Position closed - realize P/L
           const realizedPL = existing.totalCost + transaction.waarde;
-          const yearData = yearlyMap.get(yearKey) || { realized: 0, deposits: 0 };
+          const yearData = yearlyMap.get(yearKey)!;
+          cumulativeValue += realizedPL;
           yearlyMap.set(yearKey, {
             ...yearData,
             realized: yearData.realized + realizedPL,
@@ -384,12 +395,16 @@ export const calculateYearlyReturns = (
   });
   
   return Array.from(yearlyMap.entries())
-    .map(([year, data]) => ({
-      year,
-      realized: data.realized,
-      unrealized: 0,
-      total: data.realized,
-    }))
+    .map(([year, data]) => {
+      const netStartValue = data.startValue - borrowedAmount;
+      return {
+        year,
+        realized: data.realized,
+        unrealized: 0,
+        total: data.realized,
+        percentage: netStartValue !== 0 ? (data.realized / netStartValue) * 100 : 0,
+      };
+    })
     .sort((a, b) => {
       return parseInt(a.year) - parseInt(b.year);
     });
@@ -397,10 +412,12 @@ export const calculateYearlyReturns = (
 
 export const calculateMonthlyReturns = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  borrowedAmount: number = 0
 ): MonthlyReturn[] => {
-  const monthlyMap = new Map<string, { realized: number; deposits: number }>();
+  const monthlyMap = new Map<string, { realized: number; deposits: number; startValue: number }>();
   const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
+  let cumulativeValue = 0;
   
   // Process transactions to calculate monthly realized P/L
   const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
@@ -424,8 +441,14 @@ export const calculateMonthlyReturns = (
   allEvents.forEach((event) => {
     const monthKey = format(event.date, 'MMM yyyy');
     
+    // Track start value for each month
+    if (!monthlyMap.has(monthKey)) {
+      monthlyMap.set(monthKey, { realized: 0, deposits: 0, startValue: cumulativeValue });
+    }
+    
     if (event.type === 'deposit') {
-      const existing = monthlyMap.get(monthKey) || { realized: 0, deposits: 0 };
+      const existing = monthlyMap.get(monthKey)!;
+      cumulativeValue += event.data.mutatie;
       monthlyMap.set(monthKey, {
         ...existing,
         deposits: existing.deposits + event.data.mutatie,
@@ -441,7 +464,8 @@ export const calculateMonthlyReturns = (
         if (newQuantity === 0) {
           // Position closed - realize P/L
           const realizedPL = existing.totalCost + transaction.waarde;
-          const monthData = monthlyMap.get(monthKey) || { realized: 0, deposits: 0 };
+          const monthData = monthlyMap.get(monthKey)!;
+          cumulativeValue += realizedPL;
           monthlyMap.set(monthKey, {
             ...monthData,
             realized: monthData.realized + realizedPL,
@@ -463,12 +487,16 @@ export const calculateMonthlyReturns = (
   });
   
   return Array.from(monthlyMap.entries())
-    .map(([month, data]) => ({
-      month,
-      realized: data.realized,
-      unrealized: 0,
-      total: data.realized,
-    }))
+    .map(([month, data]) => {
+      const netStartValue = data.startValue - borrowedAmount;
+      return {
+        month,
+        realized: data.realized,
+        unrealized: 0,
+        total: data.realized,
+        percentage: netStartValue !== 0 ? (data.realized / netStartValue) * 100 : 0,
+      };
+    })
     .sort((a, b) => {
       const dateA = parse(a.month, 'MMM yyyy', new Date());
       const dateB = parse(b.month, 'MMM yyyy', new Date());
@@ -478,7 +506,8 @@ export const calculateMonthlyReturns = (
 
 export const calculateYTDPerformance = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  borrowedAmount: number = 0
 ): PortfolioSnapshot[] => {
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -494,7 +523,32 @@ export const calculateYTDPerformance = (
     return !isNaN(date.getTime()) && date >= startOfYear;
   });
   
-  return calculatePortfolioOverTime(ytdTransactions, ytdActivities);
+  // Get portfolio value at start of year
+  const allTransactionsBeforeYTD = transactions.filter(t => {
+    const date = parse(`${t.datum} ${t.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    return !isNaN(date.getTime()) && date < startOfYear;
+  });
+  
+  const allActivitiesBeforeYTD = accountActivities.filter(a => {
+    const date = parse(`${a.datum} ${a.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    return !isNaN(date.getTime()) && date < startOfYear;
+  });
+  
+  const snapshotsBeforeYTD = calculatePortfolioOverTime(allTransactionsBeforeYTD, allActivitiesBeforeYTD);
+  const startValue = snapshotsBeforeYTD.length > 0 
+    ? snapshotsBeforeYTD[snapshotsBeforeYTD.length - 1].value 
+    : 0;
+  
+  const ytdSnapshots = calculatePortfolioOverTime(ytdTransactions, ytdActivities);
+  
+  // Adjust snapshots to be relative to start of year and calculate percentages
+  const netStartValue = startValue - borrowedAmount;
+  
+  return ytdSnapshots.map(snapshot => ({
+    date: snapshot.date,
+    value: snapshot.value,
+    percentage: netStartValue !== 0 ? (snapshot.value / netStartValue) * 100 : 0,
+  }));
 };
 
 export const calculateCumulativeReturns = (
