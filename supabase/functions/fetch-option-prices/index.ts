@@ -9,33 +9,47 @@ const corsHeaders = {
 };
 
 const BASE_URL = "https://www.beursduivel.be";
-const HEADERS = { "User-Agent": "Mozilla/5.0 (Edge Function)" };
+const HEADERS: Record<string, string> = {
+  "User-Agent": "Mozilla/5.0 (Edge Function)",
+  "Accept-Language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
+};
 
 interface OptionHolding {
   isin: string;
-  product: string;
+  product: string; // e.g. "AH C35.00 21NOV25"
 }
-
 interface ScrapedOption {
-  type: string;
-  expiry: string;
-  strike: string;
-  issueId: string;
-  url: string;
+  type: "Call" | "Put";
+  expiry: string; // e.g. "Oktober 2025 (AEX / AH)"
+  strike: string; // e.g. "36,500"  (comma decimal)
+  issueId: string; // e.g. "523396658"
+  url: string; // absolute page URL
 }
 
-/**
- * Normalize relative URLs like ../../../Optie-Koers/... into absolute
- */
 function cleanHref(href: string): string {
+  // normalize ../../../ paths into absolute URLs
   const normalized = href.replace(/\.\.\/\.\.\//g, "/");
   const url = new URL(normalized, BASE_URL);
   return url.toString();
 }
 
-/**
- * Scrape all available Ahold Delhaize options from beursduivel
- */
+function toCommaDecimal(s: string): string {
+  // ensure "35.00" -> "35,00", "35,00" stays "35,00"
+  return s.includes(",") ? s : s.replace(".", ",");
+}
+
+function onlyLeadingNumber(txt: string | null | undefined): string {
+  // Grab ONLY the first number (with optional thousands/decimal comma/dot)
+  // e.g. "36,000   <small>17 okt</small>" -> "36,000"
+  // e.g. "36.50" -> "36.50"
+  if (!txt) return "";
+  const m = txt
+    .replace(/\s+/g, " ")
+    .trim()
+    .match(/^([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)/);
+  return m ? m[1] : "";
+}
+
 async function fetchOptionChain(): Promise<ScrapedOption[]> {
   const url = `${BASE_URL}/Aandeel-Koers/11755/Ahold-Delhaize-Koninklijke/opties-expiratiedatum.aspx`;
   console.log(`Fetching option chain from ${url} ...`);
@@ -48,13 +62,18 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
 
   const options: ScrapedOption[] = [];
   for (const section of doc.querySelectorAll("section.contentblock")) {
-    const expiry = (section as Element).querySelector("h3.titlecontent")?.textContent?.trim() ?? "Unknown Expiry";
+    const expiry =
+      (section as Element).querySelector("h3.titlecontent")?.textContent?.replace(/\s+/g, " ").trim() ??
+      "Unknown Expiry";
 
     for (const row of (section as Element).querySelectorAll("tr")) {
-      const strike = (row as Element).querySelector(".optiontable__focus")?.textContent?.trim().split(/\s+/)[0] ?? "";
-      if (!strike) continue;
+      const strikeRaw = onlyLeadingNumber((row as Element).querySelector(".optiontable__focus")?.textContent);
+      if (!strikeRaw) continue;
 
-      for (const optType of ["Call", "Put"]) {
+      // Standardize strike as comma decimal for comparison
+      const normalizedStrike = toCommaDecimal(strikeRaw);
+
+      for (const optType of ["Call", "Put"] as const) {
         const link = (row as Element).querySelector(`a.optionlink.${optType}`);
         if (!link) continue;
         const href = link.getAttribute("href");
@@ -67,7 +86,7 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
         options.push({
           type: optType,
           expiry,
-          strike,
+          strike: normalizedStrike,
           issueId,
           url: cleanHref(href),
         });
@@ -78,13 +97,10 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
   return options;
 }
 
-/**
- * Fetch live price from the option detail page
- */
 async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   const response = await fetch(option.url, { headers: HEADERS });
   if (!response.ok) {
-    console.warn(`Failed to fetch price for ${option.issueId}: ${response.status}`);
+    console.warn(`Failed to fetch price page for ${option.issueId}: ${response.status}`);
     return null;
   }
 
@@ -93,57 +109,103 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   if (!doc) return null;
 
   const el = doc.querySelector(`span[id="${option.issueId}LastPrice"]`);
-  if (!el?.textContent) return null;
+  if (!el?.textContent) {
+    console.warn(`Price element not found for ${option.issueId} on detail page`);
+    return null;
+  }
 
   const priceText = el.textContent.trim().replace(",", ".");
   const price = parseFloat(priceText);
-  if (isNaN(price)) return null;
+  if (Number.isNaN(price)) {
+    console.warn(`Invalid price "${el.textContent.trim()}" for ${option.issueId}`);
+    return null;
+  }
 
   console.log(`Fetched live price for ${option.issueId}: ${price}`);
   return price;
 }
 
 /**
- * Parse a holding like:
- *  AH C35.00 21NOV25
- *  AH P38.00 21NOV25
- *  AHOLD DELHAIZE CALL 38.00 17-11-2025
+ * Parse a holding string from frontend. Primary format:
+ *   "AH C35.00 21NOV25"
+ *   "AH P38.00 21NOV25"
+ * Also supports compact/loose whitespace & optional AH9.
+ * Fallback: verbose "AHOLD DELHAIZE CALL 38.00 17-11-2025"
  */
-function matchOptionToHolding(holding: OptionHolding) {
-  const product = holding.product.trim();
+function matchOptionToHolding(holding: OptionHolding): { strike: string; expiry: string; type: "Call" | "Put" } | null {
+  const raw = (holding.product ?? "").toString();
+  // normalize whitespace
+  const product = raw.replace(/\s+/g, " ").trim();
 
-  // Expect format: AH C35.00 21NOV25 or AH P38.00 21NOV25
-  const pattern = /^AH\s+([CP])\s*([\d.]+)\s+(\d{1,2})([A-Z]{3})(\d{2})$/i;
-  const match = product.match(pattern);
-  if (!match) {
-    console.warn(`Could not parse option from product: ${product}`);
-    console.warn(`RAW PRODUCT STRING: [${product}]`);
-    return null;
+  // Debug: uncomment when you need to hunt hidden chars
+  // console.warn(`RAW PRODUCT STRING: [${product}] len=${product.length}`);
+  // console.warn(`CODES:`, Array.from(product).map(c => c.charCodeAt(0)));
+
+  // Primary compact pattern: "AH C35.00 21NOV25" or "AH9 P38.00 05OCT26"
+  // Groups: [1]=C|P, [2]=strike, [3]=day, [4]=MMM, [5]=YY
+  const compact = /^(?:AH|AH9)\s+([CP])\s*([\d]+(?:[.,]\d+)?)\s+(\d{1,2})([A-Za-z]{3})(\d{2})$/i;
+  let m = product.match(compact);
+
+  let type: "Call" | "Put";
+  let strike: string;
+  let expiry: string;
+
+  if (m) {
+    const [, typeLetter, strikeRaw, _day, monthAbbr, yearShort] = m;
+    type = typeLetter.toUpperCase() === "C" ? "Call" : "Put";
+    strike = toCommaDecimal(strikeRaw);
+
+    const monthMap: Record<string, string> = {
+      JAN: "Januari",
+      FEB: "Februari",
+      MAR: "Maart",
+      APR: "April",
+      MAY: "Mei",
+      JUN: "Juni",
+      JUL: "Juli",
+      AUG: "Augustus",
+      SEP: "September",
+      OCT: "Oktober",
+      NOV: "November",
+      DEC: "December",
+    };
+    const month = monthMap[monthAbbr.toUpperCase()] || monthAbbr;
+    const year = `20${yearShort}`;
+    expiry = `${month} ${year}`;
+    return { strike, expiry, type };
   }
 
-  const [, typeLetter, strikeRaw, , monthAbbr, yearShort] = match;
-  const type = typeLetter.toUpperCase() === "C" ? "Call" : "Put";
-  const strike = strikeRaw.replace(".", ",");
+  // Fallback verbose pattern:
+  // "AHOLD DELHAIZE CALL 38.00 17-11-2025"
+  // Groups: [1]=CALL|PUT, [2]=strike, [3]=dd, [4]=mm, [5]=yyyy
+  const verbose = /AHOLD\s+DELHAIZE\s+(CALL|PUT)\s+([\d]+(?:[.,]\d+)?)\s+(\d{1,2})-(\d{1,2})-(\d{4})/i;
+  m = product.match(verbose);
+  if (m) {
+    const [, tWord, strikeRaw, _d, mm, yyyy] = m;
+    type = tWord.toUpperCase() === "CALL" ? "Call" : "Put";
+    strike = toCommaDecimal(strikeRaw);
 
-  const monthMap: Record<string, string> = {
-    JAN: "Januari",
-    FEB: "Februari",
-    MAR: "Maart",
-    APR: "April",
-    MAY: "Mei",
-    JUN: "Juni",
-    JUL: "Juli",
-    AUG: "Augustus",
-    SEP: "September",
-    OCT: "Oktober",
-    NOV: "November",
-    DEC: "December",
-  };
-  const month = monthMap[monthAbbr.toUpperCase()] || monthAbbr;
-  const year = `20${yearShort}`;
+    const monthNames = [
+      "Januari",
+      "Februari",
+      "Maart",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Augustus",
+      "September",
+      "Oktober",
+      "November",
+      "December",
+    ];
+    const monthIdx = Math.max(0, Math.min(11, parseInt(mm, 10) - 1));
+    expiry = `${monthNames[monthIdx]} ${yyyy}`;
+    return { strike, expiry, type };
+  }
 
-  const expiry = `${month} ${year}`;
-  return { strike, expiry, type };
+  console.warn(`Could not parse option from product: ${product}`);
+  return null;
 }
 
 serve(async (req) => {
@@ -162,7 +224,9 @@ serve(async (req) => {
 
     console.log(`Fetching prices for ${holdings.length} holdings...`);
     const scrapedOptions = await fetchOptionChain();
-    const results: any[] = [];
+    const results: Array<
+      { product: string; status: "success"; price: number } | { product: string; status: "failed"; reason: string }
+    > = [];
 
     for (const holding of holdings) {
       const parsed = matchOptionToHolding(holding);
@@ -171,12 +235,25 @@ serve(async (req) => {
         continue;
       }
 
+      // We match by: type + strike (comma-decimal) + month+year presence in section header
       const match = scrapedOptions.find(
-        (opt) => opt.strike === parsed.strike && opt.expiry.includes(parsed.expiry) && opt.type === parsed.type,
+        (opt) =>
+          opt.type === parsed.type &&
+          opt.strike === parsed.strike &&
+          (opt.expiry.includes(parsed.expiry) || // "November 2025" in "November 2025 (AEX / AH)"
+            opt.expiry.startsWith(parsed.expiry)), // extra guard
       );
 
       if (!match) {
-        console.warn(`No match found for ${holding.product}`);
+        console.warn(
+          `No match found for ${holding.product} (parsed: ${parsed.type} ${parsed.strike} ${parsed.expiry})`,
+        );
+        // Helpful: dump a few close candidates for debugging
+        const near = scrapedOptions
+          .filter((o) => o.type === parsed.type && o.expiry.includes(parsed.expiry))
+          .slice(0, 3)
+          .map((o) => ({ strike: o.strike, expiry: o.expiry }));
+        console.warn(`Nearby candidates: ${JSON.stringify(near)}`);
         results.push({ product: holding.product, status: "failed", reason: "no match found" });
         continue;
       }
@@ -188,10 +265,11 @@ serve(async (req) => {
       }
 
       results.push({ product: holding.product, status: "success", price });
-      await new Promise((r) => setTimeout(r, 400)); // gentle throttle
+      // gentle throttle
+      await new Promise((r) => setTimeout(r, 350));
     }
 
-    // 🔒 Supabase authentication & DB update
+    // 🔒 Supabase auth + upsert
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing Authorization header");
 
@@ -208,27 +286,30 @@ serve(async (req) => {
     } = await supabase.auth.getUser(token);
     if (userError || !user) throw new Error("Invalid authorization token");
 
-    const updates = results.filter((r) => r.status === "success");
-    for (const u of updates) {
-      const holding = holdings.find((h) => h.product === u.product);
+    const successes = results.filter(
+      (r): r is { product: string; status: "success"; price: number } => r.status === "success",
+    );
+
+    for (const r of successes) {
+      const holding = holdings.find((h) => h.product === r.product);
       if (!holding) continue;
 
       const { error: upsertError } = await supabase.from("current_prices").upsert(
         {
           user_id: user.id,
           isin: holding.isin,
-          current_price: u.price,
+          current_price: r.price,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id,isin" },
       );
 
       if (upsertError) {
-        console.error(`Database update failed for ${holding.product}:`, upsertError);
+        console.error(`Database update failed for ${r.product}:`, upsertError);
       }
     }
 
-    console.log(`Successfully fetched ${updates.length}/${holdings.length} prices`);
+    console.log(`Successfully fetched ${successes.length}/${holdings.length} prices`);
     return new Response(JSON.stringify({ success: true, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -239,10 +320,7 @@ serve(async (req) => {
         success: false,
         error: err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error",
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
 });
