@@ -34,6 +34,11 @@ export const PortfolioOverview = ({
   const isStocksRealizedProfitable = stocksRealized >= 0;
   const isStocksUnrealizedProfitable = stocksUnrealized >= 0;
 
+  const totalRealized = optionsRealized + stocksRealized;
+  const totalUnrealized = optionsUnrealized + stocksUnrealized;
+  const isTotalRealizedProfitable = totalRealized >= 0;
+  const isTotalUnrealizedProfitable = totalUnrealized >= 0;
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
       style: 'currency',
@@ -134,11 +139,31 @@ export const PortfolioOverview = ({
 
         <Card className="p-6">
           <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total P/L</p>
-              <h3 className={`text-2xl font-bold mt-2 ${isTotalProfitable ? 'text-success' : 'text-destructive'}`}>
+            <div className="w-full">
+              <p className="text-sm font-medium text-muted-foreground mb-2">Total P/L</p>
+              <h3 className={`text-2xl font-bold ${isTotalProfitable ? 'text-success' : 'text-destructive'}`}>
                 {formatCurrency(totalPL)}
               </h3>
+              <div className="mt-3 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Realized
+                  </span>
+                  <span className={isTotalRealizedProfitable ? 'text-success' : 'text-destructive'}>
+                    {formatCurrency(totalRealized)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Unlock className="w-3 h-3" />
+                    Unrealized
+                  </span>
+                  <span className={isTotalUnrealizedProfitable ? 'text-success' : 'text-destructive'}>
+                    {formatCurrency(totalUnrealized)}
+                  </span>
+                </div>
+              </div>
             </div>
             <div className={`p-2 rounded-lg ${isTotalProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
               {isTotalProfitable ? (
