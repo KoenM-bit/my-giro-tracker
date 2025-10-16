@@ -66,7 +66,7 @@ const Index = () => {
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities);
   const profitLoss = totalValue;
 
-  if (transactions.length === 0) {
+  if (transactions.length === 0 && accountActivities.length === 0) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
@@ -117,8 +117,9 @@ const Index = () => {
                 <h1 className="text-3xl font-bold">DeGiro Portfolio Tracker</h1>
               </div>
               <p className="text-muted-foreground">
-                Tracking {transactions.length} transactions
-                {accountActivities.length > 0 && ` • ${accountActivities.length} account activities`}
+                {transactions.length > 0 && `Tracking ${transactions.length} transactions`}
+                {transactions.length > 0 && accountActivities.length > 0 && ' • '}
+                {accountActivities.length > 0 && `${accountActivities.length} account activities`}
               </p>
             </div>
             
