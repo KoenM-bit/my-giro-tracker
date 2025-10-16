@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileUpload } from '@/components/FileUpload';
+import { CompactFileUpload } from '@/components/CompactFileUpload';
 import { PortfolioOverview } from '@/components/PortfolioOverview';
 import { PortfolioChart } from '@/components/PortfolioChart';
 import { HoldingsTable } from '@/components/HoldingsTable';
@@ -508,7 +509,11 @@ const Index = () => {
               </p>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex items-center gap-4">
+              <CompactFileUpload 
+                onTransactionFileSelect={handleFileSelect}
+                onAccountFileSelect={handleAccountActivitySelect}
+              />
               <SettingsDialog 
                 portfolioSize={portfolioSize}
                 onPortfolioSizeChange={handlePortfolioSizeChange}
@@ -520,23 +525,6 @@ const Index = () => {
                 Logout
               </Button>
             </div>
-          </div>
-          
-          <div className="mb-6">
-            <Tabs defaultValue="transactions" className="w-[400px]">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="transactions">Transacties</TabsTrigger>
-                <TabsTrigger value="account">In/Uitboekingen</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="transactions" className="mt-4">
-                <FileUpload onFileSelect={handleFileSelect} />
-              </TabsContent>
-              
-              <TabsContent value="account" className="mt-4">
-                <FileUpload onFileSelect={handleAccountActivitySelect} />
-              </TabsContent>
-            </Tabs>
           </div>
 
           <PortfolioOverview
