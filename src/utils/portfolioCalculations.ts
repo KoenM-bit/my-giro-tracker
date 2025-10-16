@@ -135,24 +135,29 @@ export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
   
   holdingsMap.forEach((holding) => {
     if (holding.quantity === 0) {
-      // Closed position = realized P/L
+      // Closed position = realized P/L (net cash flow)
       if (holding.isOption) {
         optionsRealized += holding.netCashFlow;
       } else {
         stocksRealized += holding.netCashFlow;
       }
     } else {
-      // Open position = unrealized P/L
+      // Open position = show as positive value (current investment/holdings value)
+      // Since netCashFlow is negative for purchases, we negate it to show as positive asset value
       if (holding.isOption) {
-        optionsUnrealized += holding.netCashFlow;
+        optionsUnrealized += -holding.netCashFlow;
       } else {
-        stocksUnrealized += holding.netCashFlow;
+        stocksUnrealized += -holding.netCashFlow;
       }
     }
   });
   
-  const optionsPL = optionsRealized + optionsUnrealized;
-  const stocksPL = stocksRealized + stocksUnrealized;
+  // For total P/L calculation:
+  // - Realized = actual profit/loss from closed positions (can be positive or negative)
+  // - Unrealized for stocks = current value of holdings (positive)
+  // Total P/L = realized gains - unrealized value invested - costs
+  const optionsPL = optionsRealized - optionsUnrealized;
+  const stocksPL = stocksRealized - stocksUnrealized;
   const totalCosts = calculateTotalCosts(transactions);
   
   return {
