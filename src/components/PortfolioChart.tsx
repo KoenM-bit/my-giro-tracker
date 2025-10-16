@@ -31,6 +31,7 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
   const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [netValueScaleMode, setNetValueScaleMode] = useState<'sensitive' | 'auto'>('sensitive');
+  const [showPortfolioValue, setShowPortfolioValue] = useState(true);
   const [netValueSnapshots, setNetValueSnapshots] = useState<any[]>([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(true);
 
@@ -423,20 +424,31 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Net Portfolio Value Over Time</h3>
             <div className="flex gap-2">
-              <Button
-                variant={netValueScaleMode === 'sensitive' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setNetValueScaleMode('sensitive')}
-              >
-                Sensitive Scale
-              </Button>
-              <Button
-                variant={netValueScaleMode === 'auto' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setNetValueScaleMode('auto')}
-              >
-                Auto Scale
-              </Button>
+              <div className="flex gap-1 border rounded-md p-1">
+                <Button
+                  variant={showPortfolioValue ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setShowPortfolioValue(!showPortfolioValue)}
+                >
+                  {showPortfolioValue ? 'Hide' : 'Show'} Portfolio Value
+                </Button>
+              </div>
+              <div className="flex gap-1 border rounded-md p-1">
+                <Button
+                  variant={netValueScaleMode === 'sensitive' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setNetValueScaleMode('sensitive')}
+                >
+                  Sensitive
+                </Button>
+                <Button
+                  variant={netValueScaleMode === 'auto' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setNetValueScaleMode('auto')}
+                >
+                  Auto
+                </Button>
+              </div>
             </div>
           </div>
           {loadingSnapshots ? (
@@ -485,15 +497,17 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
                   name="netValue"
                   dot={{ r: 3 }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="portfolioValue"
-                  stroke="hsl(var(--chart-2))"
-                  strokeWidth={1.5}
-                  name="portfolioValue"
-                  dot={false}
-                  strokeDasharray="5 5"
-                />
+                {showPortfolioValue && (
+                  <Line
+                    type="monotone"
+                    dataKey="portfolioValue"
+                    stroke="hsl(var(--chart-2))"
+                    strokeWidth={1.5}
+                    name="portfolioValue"
+                    dot={false}
+                    strokeDasharray="5 5"
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           )}
