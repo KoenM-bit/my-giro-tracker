@@ -14,7 +14,141 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      account_activities: {
+        Row: {
+          created_at: string
+          datum: string
+          fx: string
+          id: string
+          is_excluded: boolean
+          isin: string
+          mutatie: number
+          mutatie_currency: string
+          omschrijving: string
+          order_id: string
+          product: string
+          saldo: number
+          saldo_currency: string
+          tijd: string
+          user_id: string
+          valutadatum: string
+        }
+        Insert: {
+          created_at?: string
+          datum: string
+          fx: string
+          id?: string
+          is_excluded?: boolean
+          isin: string
+          mutatie: number
+          mutatie_currency: string
+          omschrijving: string
+          order_id: string
+          product: string
+          saldo: number
+          saldo_currency: string
+          tijd: string
+          user_id: string
+          valutadatum: string
+        }
+        Update: {
+          created_at?: string
+          datum?: string
+          fx?: string
+          id?: string
+          is_excluded?: boolean
+          isin?: string
+          mutatie?: number
+          mutatie_currency?: string
+          omschrijving?: string
+          order_id?: string
+          product?: string
+          saldo?: number
+          saldo_currency?: string
+          tijd?: string
+          user_id?: string
+          valutadatum?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          aantal: number
+          beurs: string
+          created_at: string
+          datum: string
+          id: string
+          is_excluded: boolean
+          isin: string
+          koers: number
+          koers_currency: string
+          lokale_waarde: number
+          lokale_waarde_currency: string
+          order_id: string
+          product: string
+          tijd: string
+          totaal: number
+          totaal_currency: string
+          transactiekosten: number
+          transactiekosten_currency: string
+          uitvoeringsplaats: string
+          user_id: string
+          waarde: number
+          waarde_currency: string
+          wisselkoers: number
+        }
+        Insert: {
+          aantal: number
+          beurs: string
+          created_at?: string
+          datum: string
+          id?: string
+          is_excluded?: boolean
+          isin: string
+          koers: number
+          koers_currency: string
+          lokale_waarde: number
+          lokale_waarde_currency: string
+          order_id: string
+          product: string
+          tijd: string
+          totaal: number
+          totaal_currency: string
+          transactiekosten: number
+          transactiekosten_currency: string
+          uitvoeringsplaats: string
+          user_id: string
+          waarde: number
+          waarde_currency: string
+          wisselkoers: number
+        }
+        Update: {
+          aantal?: number
+          beurs?: string
+          created_at?: string
+          datum?: string
+          id?: string
+          is_excluded?: boolean
+          isin?: string
+          koers?: number
+          koers_currency?: string
+          lokale_waarde?: number
+          lokale_waarde_currency?: string
+          order_id?: string
+          product?: string
+          tijd?: string
+          totaal?: number
+          totaal_currency?: string
+          transactiekosten?: number
+          transactiekosten_currency?: string
+          uitvoeringsplaats?: string
+          user_id?: string
+          waarde?: number
+          waarde_currency?: string
+          wisselkoers?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

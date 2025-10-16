@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FileUpload } from '@/components/FileUpload';
 import { PortfolioOverview } from '@/components/PortfolioOverview';
 import { PortfolioChart } from '@/components/PortfolioChart';
@@ -6,6 +7,7 @@ import { HoldingsTable } from '@/components/HoldingsTable';
 import { TransactionTable } from '@/components/TransactionTable';
 import { TimeframeSelector } from '@/components/TimeframeSelector';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { DeGiroTransaction, AccountActivity } from '@/types/transaction';
 import { parseDeGiroCSV, parseAccountActivityCSV } from '@/utils/csvParser';
 import {
@@ -17,20 +19,145 @@ import {
   calculateProfitLossByType,
 } from '@/utils/portfolioCalculations';
 import { toast } from 'sonner';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, LogOut } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<DeGiroTransaction[]>([]);
   const [accountActivities, setAccountActivities] = useState<AccountActivity[]>([]);
   const [timeframe, setTimeframe] = useState('ALL');
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
   const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
 
+  useEffect(() => {
+    // Check authentication
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate('/auth');
+      } else {
+        setUser(session.user);
+        loadDataFromDatabase(session.user.id);
+      }
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate('/auth');
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const loadDataFromDatabase = async (userId: string) => {
+    try {
+      // Load transactions
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('datum', { ascending: false });
+
+      if (txError) throw txError;
+
+      if (txData) {
+        const mappedTransactions: DeGiroTransaction[] = txData.map(t => ({
+          datum: t.datum,
+          tijd: t.tijd,
+          product: t.product,
+          isin: t.isin,
+          beurs: t.beurs,
+          uitvoeringsplaats: t.uitvoeringsplaats,
+          aantal: Number(t.aantal),
+          koers: Number(t.koers),
+          koersCurrency: t.koers_currency,
+          lokaleWaarde: Number(t.lokale_waarde),
+          lokaleWaardeCurrency: t.lokale_waarde_currency,
+          waarde: Number(t.waarde),
+          waardeCurrency: t.waarde_currency,
+          wisselkoers: Number(t.wisselkoers),
+          transactiekosten: Number(t.transactiekosten),
+          transactiekostenCurrency: t.transactiekosten_currency,
+          totaal: Number(t.totaal),
+          totaalCurrency: t.totaal_currency,
+          orderId: t.order_id,
+        }));
+        setTransactions(mappedTransactions);
+      }
+
+      // Load account activities
+      const { data: actData, error: actError } = await supabase
+        .from('account_activities')
+        .select('*')
+        .eq('user_id', userId)
+        .order('datum', { ascending: false });
+
+      if (actError) throw actError;
+
+      if (actData) {
+        const mappedActivities: AccountActivity[] = actData.map(a => ({
+          datum: a.datum,
+          tijd: a.tijd,
+          valutadatum: a.valutadatum,
+          product: a.product,
+          isin: a.isin,
+          omschrijving: a.omschrijving,
+          fx: a.fx,
+          mutatie: Number(a.mutatie),
+          mutatieCurrency: a.mutatie_currency,
+          saldo: Number(a.saldo),
+          saldoCurrency: a.saldo_currency,
+          orderId: a.order_id,
+        }));
+        setAccountActivities(mappedActivities);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Failed to load data from database');
+    }
+  };
+
   const handleFileSelect = async (file: File) => {
     try {
       const parsedTransactions = await parseDeGiroCSV(file);
-      setTransactions(parsedTransactions);
-      toast.success(`Successfully loaded ${parsedTransactions.length} transactions`);
+      
+      // Save to database
+      if (user) {
+        const { error } = await supabase.from('transactions').insert(
+          parsedTransactions.map(t => ({
+            user_id: user.id,
+            datum: t.datum,
+            tijd: t.tijd,
+            product: t.product,
+            isin: t.isin,
+            beurs: t.beurs,
+            uitvoeringsplaats: t.uitvoeringsplaats,
+            aantal: t.aantal,
+            koers: t.koers,
+            koers_currency: t.koersCurrency,
+            lokale_waarde: t.lokaleWaarde,
+            lokale_waarde_currency: t.lokaleWaardeCurrency,
+            waarde: t.waarde,
+            waarde_currency: t.waardeCurrency,
+            wisselkoers: t.wisselkoers,
+            transactiekosten: t.transactiekosten,
+            transactiekosten_currency: t.transactiekostenCurrency,
+            totaal: t.totaal,
+            totaal_currency: t.totaalCurrency,
+            order_id: t.orderId,
+          }))
+        );
+
+        if (error) throw error;
+        await loadDataFromDatabase(user.id);
+        toast.success(`Successfully imported ${parsedTransactions.length} transactions`);
+      }
     } catch (error) {
       console.error('Error parsing CSV:', error);
       toast.error('Failed to parse CSV file. Please check the format.');
@@ -40,12 +167,40 @@ const Index = () => {
   const handleAccountActivitySelect = async (file: File) => {
     try {
       const parsedActivities = await parseAccountActivityCSV(file);
-      setAccountActivities(parsedActivities);
-      toast.success(`Successfully loaded ${parsedActivities.length} account activities`);
+      
+      // Save to database
+      if (user) {
+        const { error } = await supabase.from('account_activities').insert(
+          parsedActivities.map(a => ({
+            user_id: user.id,
+            datum: a.datum,
+            tijd: a.tijd,
+            valutadatum: a.valutadatum,
+            product: a.product,
+            isin: a.isin,
+            omschrijving: a.omschrijving,
+            fx: a.fx,
+            mutatie: a.mutatie,
+            mutatie_currency: a.mutatieCurrency,
+            saldo: a.saldo,
+            saldo_currency: a.saldoCurrency,
+            order_id: a.orderId,
+          }))
+        );
+
+        if (error) throw error;
+        await loadDataFromDatabase(user.id);
+        toast.success(`Successfully imported ${parsedActivities.length} account activities`);
+      }
     } catch (error) {
       console.error('Error parsing CSV:', error);
       toast.error('Failed to parse account activity CSV file. Please check the format.');
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
   };
 
   const toggleHoldingExclusion = (key: string) => {
@@ -94,21 +249,33 @@ const Index = () => {
   const stockTransactions = transactions.filter(t => !optionPattern.test(t.product));
   const optionTransactions = transactions.filter(t => optionPattern.test(t.product));
 
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
   if (transactions.length === 0 && accountActivities.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <TrendingUp className="w-6 h-6 text-primary" />
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <TrendingUp className="w-6 h-6 text-primary" />
+                </div>
+                <h1 className="text-3xl font-bold">DeGiro Portfolio Tracker</h1>
               </div>
-              <h1 className="text-3xl font-bold">DeGiro Portfolio Tracker</h1>
+              <p className="text-muted-foreground">
+                Upload your DeGiro transaction history to analyze your portfolio performance
+              </p>
             </div>
-            <p className="text-muted-foreground">
-              Upload your DeGiro transaction history to analyze your portfolio performance
-            </p>
+            <Button onClick={handleLogout} variant="outline" size="sm">
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
           </div>
+        </div>
           
           <Tabs defaultValue="transactions" className="w-full">
             <TabsList className="mb-4">
@@ -151,6 +318,15 @@ const Index = () => {
               </p>
             </div>
             
+            <div className="flex gap-2">
+              <Button onClick={handleLogout} variant="outline" size="sm">
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </div>
+          </div>
+          
+          <div className="mb-6">
             <Tabs defaultValue="transactions" className="w-[400px]">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="transactions">Transacties</TabsTrigger>
