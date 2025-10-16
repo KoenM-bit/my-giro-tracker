@@ -222,9 +222,10 @@ export const calculateProfitLossByType = (
   });
 
   // Calculate portfolio value based on current holdings
-  // Portfolio Value = Stock Holdings Value - Options Holdings Value
-  let stocksValue = 0;
-  let optionsValue = 0;
+  // Portfolio Value = Sum of all current holdings (quantity * price)
+  // For stocks: quantity * current price
+  // For options: quantity * current price * 100 (contract multiplier)
+  let portfolioValue = 0;
   
   holdings.forEach((holding) => {
     if (holding.currentPrice !== undefined && holding.quantity !== 0) {
@@ -234,16 +235,14 @@ export const calculateProfitLossByType = (
       if (holdingData && holdingData.quantity !== 0) {
         if (holdingData.isOption) {
           // Options: quantity * current price * 100 (contract multiplier)
-          optionsValue += holding.quantity * holding.currentPrice * 100;
+          portfolioValue += holding.quantity * holding.currentPrice * 100;
         } else {
           // Stocks: quantity * current price
-          stocksValue += holding.quantity * holding.currentPrice;
+          portfolioValue += holding.quantity * holding.currentPrice;
         }
       }
     }
   });
-  
-  const portfolioValue = stocksValue - optionsValue;
   
   const optionsPL = optionsRealized;
   const stocksPL = stocksRealized;
