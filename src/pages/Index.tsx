@@ -587,7 +587,8 @@ const Index = () => {
 
           <TabsContent value="stocks" className="space-y-6">
             <HoldingsTable 
-              holdings={stockHoldings} 
+              holdings={stockHoldings}
+              allHoldings={allHoldings}
               excludedHoldings={excludedHoldings}
               onToggleExclusion={toggleHoldingExclusion}
               onPriceUpdate={handlePriceUpdate}
@@ -597,7 +598,8 @@ const Index = () => {
 
           <TabsContent value="options" className="space-y-6">
             <HoldingsTable 
-              holdings={optionHoldings} 
+              holdings={optionHoldings}
+              allHoldings={allHoldings}
               excludedHoldings={excludedHoldings}
               onToggleExclusion={toggleHoldingExclusion}
               onPriceUpdate={handlePriceUpdate}

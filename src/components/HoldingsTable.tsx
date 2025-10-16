@@ -11,12 +11,13 @@ import { TrendingUp } from 'lucide-react';
 
 interface HoldingsTableProps {
   holdings: PortfolioHolding[];
+  allHoldings?: PortfolioHolding[];
   excludedHoldings: Set<string>;
   onToggleExclusion: (key: string) => void;
   onPriceUpdate?: (isin: string, product: string, price: number) => void;
 }
 
-export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, onPriceUpdate }: HoldingsTableProps) => {
+export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggleExclusion, onPriceUpdate }: HoldingsTableProps) => {
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string>('');
   const [scenarioOpen, setScenarioOpen] = useState(false);
@@ -54,8 +55,20 @@ export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, o
 
   const hasOptionsForStock = (stockProduct: string) => {
     // Check if there are options that match this stock
-    const stockSymbol = stockProduct.split(' ')[0];
-    return holdings.some(h => !isStock(h.product) && h.product.startsWith(stockSymbol));
+    const holdingsToCheck = allHoldings || holdings;
+    
+    // Find options and extract their tickers
+    return holdingsToCheck.some(h => {
+      if (isStock(h.product)) return false;
+      
+      // Extract ticker from option (e.g., "AH C35.00 21NOV25" -> "AH")
+      const match = h.product.match(/^([A-Z]+)\s+[CP]/i);
+      if (!match) return false;
+      
+      const ticker = match[1];
+      // Check if stock name includes this ticker
+      return stockProduct.includes(ticker);
+    });
   };
 
   const openScenarioAnalysis = (stockProduct: string) => {
@@ -65,9 +78,16 @@ export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, o
 
   // Get holdings relevant to the scenario (stock + its options)
   const scenarioHoldings = scenarioStock 
-    ? holdings.filter(h => {
-        const stockSymbol = scenarioStock.split(' ')[0];
-        return h.product === scenarioStock || h.product.startsWith(stockSymbol);
+    ? (allHoldings || holdings).filter(h => {
+        // Include the stock itself
+        if (h.product === scenarioStock) return true;
+        
+        // Include options that match this stock
+        const match = h.product.match(/^([A-Z]+)\s+[CP]/i);
+        if (!match) return false;
+        
+        const ticker = match[1];
+        return scenarioStock.includes(ticker);
       })
     : [];
 
