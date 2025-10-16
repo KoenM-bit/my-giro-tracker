@@ -175,9 +175,9 @@ const Index = () => {
     try {
       const parsedTransactions = await parseDeGiroCSV(file);
       
-      // Save to database
+      // Save to database using upsert to prevent duplicates
       if (user) {
-        const { error } = await supabase.from('transactions').insert(
+        const { error } = await supabase.from('transactions').upsert(
           parsedTransactions.map(t => ({
             user_id: user.id,
             datum: t.datum,
@@ -199,12 +199,16 @@ const Index = () => {
             totaal: t.totaal,
             totaal_currency: t.totaalCurrency,
             order_id: t.orderId,
-          }))
+          })),
+          {
+            onConflict: 'user_id,order_id,datum,tijd',
+            ignoreDuplicates: true
+          }
         );
 
         if (error) throw error;
         await loadDataFromDatabase(user.id);
-        toast.success(`Successfully imported ${parsedTransactions.length} transactions`);
+        toast.success(`Successfully imported ${parsedTransactions.length} transactions (duplicates skipped)`);
       }
     } catch (error) {
       console.error('Error parsing CSV:', error);
@@ -216,9 +220,9 @@ const Index = () => {
     try {
       const parsedActivities = await parseAccountActivityCSV(file);
       
-      // Save to database
+      // Save to database using upsert to prevent duplicates
       if (user) {
-        const { error } = await supabase.from('account_activities').insert(
+        const { error } = await supabase.from('account_activities').upsert(
           parsedActivities.map(a => ({
             user_id: user.id,
             datum: a.datum,
@@ -233,12 +237,16 @@ const Index = () => {
             saldo: a.saldo,
             saldo_currency: a.saldoCurrency,
             order_id: a.orderId,
-          }))
+          })),
+          {
+            onConflict: 'user_id,order_id,datum,tijd',
+            ignoreDuplicates: true
+          }
         );
 
         if (error) throw error;
         await loadDataFromDatabase(user.id);
-        toast.success(`Successfully imported ${parsedActivities.length} account activities`);
+        toast.success(`Successfully imported ${parsedActivities.length} account activities (duplicates skipped)`);
       }
     } catch (error) {
       console.error('Error parsing CSV:', error);
