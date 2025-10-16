@@ -11,9 +11,14 @@ export const FileUpload = ({ onFileSelect }: FileUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('FileUpload: handleFileChange triggered');
     const file = event.target.files?.[0];
+    console.log('FileUpload: file selected:', file?.name, file?.size);
     if (file) {
+      console.log('FileUpload: calling onFileSelect');
       onFileSelect(file);
+    } else {
+      console.log('FileUpload: no file selected');
     }
   };
 
