@@ -123,6 +123,50 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
     }
   };
 
+  const handleFetchOptionPrices = async () => {
+    setIsFetchingPrices(true);
+    
+    try {
+      // Only fetch for options (not stocks)
+      const optionHoldings = holdings.filter(h => !isStock(h.product));
+      
+      if (optionHoldings.length === 0) {
+        toast.info('No options to fetch prices for');
+        setIsFetchingPrices(false);
+        return;
+      }
+
+      toast.info(`Fetching prices for ${optionHoldings.length} options...`);
+
+      const { data, error } = await supabase.functions.invoke('fetch-option-prices', {
+        body: {
+          holdings: optionHoldings.map(h => ({
+            isin: h.isin,
+            product: h.product
+          }))
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        const { summary } = data;
+        if (summary.successful > 0) {
+          toast.success(`Updated ${summary.successful} option prices successfully!`);
+          // Trigger a page refresh to show new prices
+          window.location.reload();
+        } else {
+          toast.warning('No option prices could be fetched');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching option prices:', error);
+      toast.error('Failed to fetch option prices');
+    } finally {
+      setIsFetchingPrices(false);
+    }
+  };
+
   // Get holdings relevant to the scenario (stock + its options)
   const scenarioHoldings = scenarioStock 
     ? (allHoldings || holdings).filter(h => {
@@ -151,7 +195,17 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
             className="gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${isFetchingPrices ? 'animate-spin' : ''}`} />
-            {isFetchingPrices ? 'Fetching...' : 'Fetch Prices'}
+            {isFetchingPrices ? 'Fetching...' : 'Fetch Stock Prices'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleFetchOptionPrices}
+            disabled={isFetchingPrices}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetchingPrices ? 'animate-spin' : ''}`} />
+            {isFetchingPrices ? 'Fetching...' : 'Fetch Option Prices'}
           </Button>
         </div>
         <Badge variant="outline" className="text-xs">
