@@ -25,6 +25,7 @@ export interface PortfolioHolding {
   isin: string;
   quantity: number;
   averagePrice: number;
+  currentPrice?: number;
   totalValue: number;
   totalCost: number;
   profitLoss: number;

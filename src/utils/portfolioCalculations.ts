@@ -95,7 +95,10 @@ export const calculateProfitLoss = (transactions: DeGiroTransaction[]): number =
   return netCashFlow - totalCosts;
 };
 
-export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
+export const calculateProfitLossByType = (
+  transactions: DeGiroTransaction[],
+  holdings: PortfolioHolding[]
+): {
   optionsPL: number;
   stocksPL: number;
   portfolioValue: number;
@@ -134,7 +137,7 @@ export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
   let stocksRealized = 0;
   let stocksUnrealized = 0;
   
-  holdingsMap.forEach((holding) => {
+  holdingsMap.forEach((holding, key) => {
     if (holding.quantity === 0) {
       // Closed position = realized P/L (net cash flow)
       if (holding.isOption) {
@@ -143,26 +146,35 @@ export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
         stocksRealized += holding.netCashFlow;
       }
     } else {
-      // Open position
+      // Open position - calculate unrealized P/L using current prices if available
+      const holdingData = holdings.find(h => `${h.isin}-${h.product}` === key);
+      
       if (holding.isOption) {
-        // For options: netCashFlow is already correct
-        // - Sold options (short): positive netCashFlow = positive unrealized P/L
-        // - Bought options (long): negative netCashFlow = negative unrealized P/L
-        optionsUnrealized += holding.netCashFlow;
+        // For options: if current price available, calculate unrealized P/L
+        // Otherwise use net cash flow
+        if (holdingData?.currentPrice !== undefined) {
+          optionsUnrealized += (holdingData.currentPrice - holdingData.averagePrice) * holding.quantity;
+        } else {
+          optionsUnrealized += holding.netCashFlow;
+        }
       } else {
-        // For stocks: negate netCashFlow to show current investment as positive value
-        // - Bought stocks: negative netCashFlow becomes positive holdings value
-        stocksUnrealized += -holding.netCashFlow;
+        // For stocks: if current price available, calculate unrealized P/L
+        // Otherwise show as cost basis (positive value)
+        if (holdingData?.currentPrice !== undefined) {
+          stocksUnrealized += (holdingData.currentPrice - holdingData.averagePrice) * holding.quantity;
+        } else {
+          stocksUnrealized += -holding.netCashFlow;
+        }
       }
     }
   });
-  
+
   // For portfolio value and P/L:
   // Portfolio Value = realized cash + current holdings value
-  // P/L = realized gains + unrealized holdings value
-  const optionsPL = optionsRealized + optionsUnrealized;
-  const stocksPL = stocksRealized + stocksUnrealized;
-  const portfolioValue = optionsPL + stocksPL;
+  // P/L = realized gains only for main calculation, unrealized shown separately
+  const optionsPL = optionsRealized;
+  const stocksPL = stocksRealized;
+  const portfolioValue = optionsRealized + stocksRealized + optionsUnrealized + stocksUnrealized;
   const totalCosts = calculateTotalCosts(transactions);
   
   return {

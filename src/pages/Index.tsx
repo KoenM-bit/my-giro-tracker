@@ -24,6 +24,7 @@ const Index = () => {
   const [accountActivities, setAccountActivities] = useState<AccountActivity[]>([]);
   const [timeframe, setTimeframe] = useState('ALL');
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
+  const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
 
   const handleFileSelect = async (file: File) => {
     try {
@@ -59,8 +60,19 @@ const Index = () => {
     });
   };
 
+  const handlePriceUpdate = (isin: string, product: string, price: number) => {
+    const key = `${isin}-${product}`;
+    setCurrentPrices(prev => new Map(prev).set(key, price));
+  };
+
   const filteredTransactions = filterTransactionsByTimeframe(transactions, timeframe);
-  const allHoldings = calculateHoldings(transactions);
+  const allHoldings = calculateHoldings(transactions).map(holding => {
+    const key = `${holding.isin}-${holding.product}`;
+    return {
+      ...holding,
+      currentPrice: currentPrices.get(key),
+    };
+  });
   const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));
   const totalCosts = calculateTotalCosts(transactions);
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities);
@@ -73,7 +85,7 @@ const Index = () => {
     optionsUnrealized, 
     stocksRealized, 
     stocksUnrealized 
-  } = calculateProfitLossByType(transactions);
+  } = calculateProfitLossByType(transactions, allHoldings);
 
   // Separate holdings and transactions for stocks and options
   const optionPattern = /[CP]\d{2,}/;
@@ -195,6 +207,7 @@ const Index = () => {
               holdings={stockHoldings} 
               excludedHoldings={excludedHoldings}
               onToggleExclusion={toggleHoldingExclusion}
+              onPriceUpdate={handlePriceUpdate}
             />
             <TransactionTable transactions={stockTransactions} />
           </TabsContent>
@@ -204,6 +217,7 @@ const Index = () => {
               holdings={optionHoldings} 
               excludedHoldings={excludedHoldings}
               onToggleExclusion={toggleHoldingExclusion}
+              onPriceUpdate={handlePriceUpdate}
             />
             <TransactionTable transactions={optionTransactions} />
           </TabsContent>
