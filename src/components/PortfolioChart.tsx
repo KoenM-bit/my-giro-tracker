@@ -30,6 +30,7 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
+  const [netValueScaleMode, setNetValueScaleMode] = useState<'sensitive' | 'auto'>('sensitive');
   const [netValueSnapshots, setNetValueSnapshots] = useState<any[]>([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(true);
 
@@ -139,6 +140,24 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
     portfolioValue: Number(snapshot.portfolio_value),
     borrowedAmount: Number(snapshot.borrowed_amount),
   }));
+
+  // Calculate Y-axis domain for net value chart
+  const getNetValueDomain = () => {
+    if (netValueChartData.length === 0 || netValueScaleMode === 'auto') return ['auto', 'auto'];
+    
+    const values = netValueChartData.map(d => d.netValue);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const range = maxValue - minValue;
+    
+    // Make scale more sensitive by reducing padding (10% instead of default ~20%)
+    const padding = range * 0.1;
+    
+    return [
+      Math.floor(minValue - padding),
+      Math.ceil(maxValue + padding)
+    ];
+  };
 
   // Cumulative returns data - removed as it's redundant with YTD percentage
 
@@ -403,6 +422,22 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
         <TabsContent value="netvalue">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Net Portfolio Value Over Time</h3>
+            <div className="flex gap-2">
+              <Button
+                variant={netValueScaleMode === 'sensitive' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setNetValueScaleMode('sensitive')}
+              >
+                Sensitive Scale
+              </Button>
+              <Button
+                variant={netValueScaleMode === 'auto' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setNetValueScaleMode('auto')}
+              >
+                Auto Scale
+              </Button>
+            </div>
           </div>
           {loadingSnapshots ? (
             <div className="h-[300px] flex items-center justify-center text-muted-foreground">
@@ -428,6 +463,7 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
                   className="text-xs" 
                   tick={{ fill: "hsl(var(--muted-foreground))" }} 
                   tickFormatter={formatCurrency}
+                  domain={getNetValueDomain()}
                 />
                 <Tooltip
                   contentStyle={{
