@@ -12,6 +12,7 @@ interface PortfolioOverviewProps {
   stocksRealized: number;
   stocksUnrealized: number;
   transactionCount: number;
+  borrowedAmount: number;
 }
 
 export const PortfolioOverview = ({
@@ -25,6 +26,7 @@ export const PortfolioOverview = ({
   stocksRealized,
   stocksUnrealized,
   transactionCount,
+  borrowedAmount,
 }: PortfolioOverviewProps) => {
   const isOptionsProfitable = optionsPL >= 0;
   const isStocksProfitable = stocksPL >= 0;
@@ -46,14 +48,28 @@ export const PortfolioOverview = ({
     }).format(value);
   };
 
+  const netPortfolioValue = totalValue - borrowedAmount;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-6">
           <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Portfolio Value</p>
-              <h3 className="text-2xl font-bold mt-2">{formatCurrency(totalValue)}</h3>
+            <div className="w-full">
+              <p className="text-sm font-medium text-muted-foreground mb-2">Portfolio Value</p>
+              <h3 className="text-2xl font-bold">{formatCurrency(totalValue)}</h3>
+              {borrowedAmount > 0 && (
+                <div className="mt-3 pt-3 border-t">
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-muted-foreground">Borrowed</span>
+                    <span className="text-destructive">{formatCurrency(borrowedAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm font-semibold">
+                    <span className="text-muted-foreground">Net Value</span>
+                    <span>{formatCurrency(netPortfolioValue)}</span>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-2 rounded-lg bg-primary/10">
               <Wallet className="w-5 h-5 text-primary" />

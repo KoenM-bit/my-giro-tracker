@@ -8,18 +8,25 @@ import { useState } from "react";
 interface SettingsDialogProps {
   portfolioSize: number;
   onPortfolioSizeChange: (size: number) => void;
+  borrowedAmount: number;
+  onBorrowedAmountChange: (amount: number) => void;
 }
 
-export const SettingsDialog = ({ portfolioSize, onPortfolioSizeChange }: SettingsDialogProps) => {
+export const SettingsDialog = ({ portfolioSize, onPortfolioSizeChange, borrowedAmount, onBorrowedAmountChange }: SettingsDialogProps) => {
   const [tempSize, setTempSize] = useState(portfolioSize.toString());
+  const [tempBorrowed, setTempBorrowed] = useState(borrowedAmount.toString());
   const [open, setOpen] = useState(false);
 
   const handleSave = () => {
     const size = parseFloat(tempSize);
+    const borrowed = parseFloat(tempBorrowed);
     if (!isNaN(size) && size > 0) {
       onPortfolioSizeChange(size);
-      setOpen(false);
     }
+    if (!isNaN(borrowed) && borrowed >= 0) {
+      onBorrowedAmountChange(borrowed);
+    }
+    setOpen(false);
   };
 
   return (
@@ -46,6 +53,19 @@ export const SettingsDialog = ({ portfolioSize, onPortfolioSizeChange }: Setting
             />
             <p className="text-sm text-muted-foreground">
               This value is used to calculate percentage returns
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="borrowed-amount">Borrowed Amount / Margin (€)</Label>
+            <Input
+              id="borrowed-amount"
+              type="number"
+              value={tempBorrowed}
+              onChange={(e) => setTempBorrowed(e.target.value)}
+              placeholder="0"
+            />
+            <p className="text-sm text-muted-foreground">
+              The margin or borrowed money that will be deducted from portfolio value
             </p>
           </div>
           <Button onClick={handleSave} className="w-full">

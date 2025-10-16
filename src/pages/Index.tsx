@@ -33,6 +33,7 @@ const Index = () => {
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
   const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
   const [portfolioSize, setPortfolioSize] = useState(50000);
+  const [borrowedAmount, setBorrowedAmount] = useState(0);
 
   useEffect(() => {
     // Check authentication
@@ -359,6 +360,8 @@ const Index = () => {
               <SettingsDialog 
                 portfolioSize={portfolioSize}
                 onPortfolioSizeChange={setPortfolioSize}
+                borrowedAmount={borrowedAmount}
+                onBorrowedAmountChange={setBorrowedAmount}
               />
               <Button onClick={handleLogout} variant="outline" size="sm">
                 <LogOut className="w-4 h-4 mr-2" />
@@ -395,6 +398,7 @@ const Index = () => {
             stocksRealized={stocksRealized}
             stocksUnrealized={stocksUnrealized}
             transactionCount={transactions.length}
+            borrowedAmount={borrowedAmount}
           />
         </div>
 
