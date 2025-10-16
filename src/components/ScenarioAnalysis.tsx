@@ -59,32 +59,6 @@ export const ScenarioAnalysis = ({ holdings, open, onOpenChange }: ScenarioAnaly
     return stock?.currentPrice || stock?.averagePrice || 0;
   }, [holdings, underlyingStock]);
 
-  // Generate price scenarios around current price
-  const priceScenarios = useMemo(() => {
-    if (!currentStockPrice || !selectedExpiration) return [];
-    
-    const scenarios = [];
-    const step = 0.5;
-    const range = 10; // +/- 10 euros around current price
-    
-    for (let price = currentStockPrice - range; price <= currentStockPrice + range; price += step) {
-      if (price > 0) {
-        const result = calculateScenarioValue(price);
-        if (result) {
-          scenarios.push({
-            price: Number(price.toFixed(2)),
-            totalPL: result.totalChange,
-            optionsPL: result.optionsChange,
-            stockPL: result.stockChange,
-          });
-        }
-      }
-    }
-    
-    return scenarios;
-  }, [currentStockPrice, selectedExpiration, holdings]);
-
-
   const calculateScenarioValue = (hypotheticalPrice: number) => {
     if (!selectedExpiration) return null;
 
@@ -194,6 +168,33 @@ export const ScenarioAnalysis = ({ holdings, open, onOpenChange }: ScenarioAnaly
       stockDetails,
     };
   };
+
+  // Generate price scenarios around current price
+  const priceScenarios = useMemo(() => {
+    if (!currentStockPrice || !selectedExpiration) return [];
+    
+    const scenarios = [];
+    const step = 0.5;
+    const range = 10; // +/- 10 euros around current price
+    
+    for (let price = currentStockPrice - range; price <= currentStockPrice + range; price += step) {
+      if (price > 0) {
+        const result = calculateScenarioValue(price);
+        if (result) {
+          scenarios.push({
+            price: Number(price.toFixed(2)),
+            totalPL: result.totalChange,
+            optionsPL: result.optionsChange,
+            stockPL: result.stockChange,
+          });
+        }
+      }
+    }
+    
+    return scenarios;
+  }, [currentStockPrice, selectedExpiration, holdings]);
+
+
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
