@@ -103,19 +103,15 @@ export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
   const optionsTransactions = transactions.filter(isOptionTransaction);
   const stocksTransactions = transactions.filter(t => !isOptionTransaction(t));
   
-  const optionsNetCashFlow = optionsTransactions.reduce((sum, t) => sum + t.waarde, 0);
-  const stocksNetCashFlow = stocksTransactions.reduce((sum, t) => sum + t.waarde, 0);
+  const optionsPL = optionsTransactions.reduce((sum, t) => sum + t.waarde, 0);
+  const stocksPL = stocksTransactions.reduce((sum, t) => sum + t.waarde, 0);
   
-  const optionsCosts = optionsTransactions.reduce((sum, t) => sum + Math.abs(t.transactiekosten), 0);
-  const stocksCosts = stocksTransactions.reduce((sum, t) => sum + Math.abs(t.transactiekosten), 0);
-  
-  const optionsPL = optionsNetCashFlow - optionsCosts;
-  const stocksPL = stocksNetCashFlow - stocksCosts;
+  const totalCosts = calculateTotalCosts(transactions);
   
   return {
     optionsPL,
     stocksPL,
-    totalPL: optionsPL + stocksPL,
+    totalPL: optionsPL + stocksPL - totalCosts,
   };
 };
 
