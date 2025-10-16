@@ -20,6 +20,7 @@ import { TrendingUp } from 'lucide-react';
 const Index = () => {
   const [transactions, setTransactions] = useState<DeGiroTransaction[]>([]);
   const [timeframe, setTimeframe] = useState('ALL');
+  const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
 
   const handleFileSelect = async (file: File) => {
     try {
@@ -32,8 +33,21 @@ const Index = () => {
     }
   };
 
+  const toggleHoldingExclusion = (key: string) => {
+    setExcludedHoldings(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
   const filteredTransactions = filterTransactionsByTimeframe(transactions, timeframe);
-  const holdings = calculateHoldings(transactions);
+  const allHoldings = calculateHoldings(transactions);
+  const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));
   const totalValue = calculatePortfolioValue(transactions);
   const totalCosts = calculateTotalCosts(transactions);
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions);
@@ -99,7 +113,11 @@ const Index = () => {
         </div>
 
         <div className="mb-8">
-          <HoldingsTable holdings={holdings} />
+          <HoldingsTable 
+            holdings={allHoldings} 
+            excludedHoldings={excludedHoldings}
+            onToggleExclusion={toggleHoldingExclusion}
+          />
         </div>
 
         <div>
