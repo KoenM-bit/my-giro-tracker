@@ -75,6 +75,13 @@ const Index = () => {
     stocksUnrealized 
   } = calculateProfitLossByType(transactions);
 
+  // Separate holdings and transactions for stocks and options
+  const optionPattern = /[CP]\d{2,}/;
+  const stockHoldings = allHoldings.filter(h => !optionPattern.test(h.product));
+  const optionHoldings = allHoldings.filter(h => optionPattern.test(h.product));
+  const stockTransactions = transactions.filter(t => !optionPattern.test(t.product));
+  const optionTransactions = transactions.filter(t => optionPattern.test(t.product));
+
   if (transactions.length === 0 && accountActivities.length === 0) {
     return (
       <div className="min-h-screen bg-background">
@@ -173,17 +180,34 @@ const Index = () => {
           <PortfolioChart data={portfolioSnapshots} timeframe={timeframe} />
         </div>
 
-        <div className="mb-8">
-          <HoldingsTable 
-            holdings={allHoldings} 
-            excludedHoldings={excludedHoldings}
-            onToggleExclusion={toggleHoldingExclusion}
-          />
-        </div>
+        <Tabs defaultValue="stocks" className="mb-8">
+          <TabsList className="mb-4">
+            <TabsTrigger value="stocks">
+              Stocks ({stockHoldings.length})
+            </TabsTrigger>
+            <TabsTrigger value="options">
+              Options ({optionHoldings.length})
+            </TabsTrigger>
+          </TabsList>
 
-        <div>
-          <TransactionTable transactions={transactions} />
-        </div>
+          <TabsContent value="stocks" className="space-y-6">
+            <HoldingsTable 
+              holdings={stockHoldings} 
+              excludedHoldings={excludedHoldings}
+              onToggleExclusion={toggleHoldingExclusion}
+            />
+            <TransactionTable transactions={stockTransactions} />
+          </TabsContent>
+
+          <TabsContent value="options" className="space-y-6">
+            <HoldingsTable 
+              holdings={optionHoldings} 
+              excludedHoldings={excludedHoldings}
+              onToggleExclusion={toggleHoldingExclusion}
+            />
+            <TransactionTable transactions={optionTransactions} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
