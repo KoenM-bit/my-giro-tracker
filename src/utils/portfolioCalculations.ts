@@ -43,39 +43,104 @@ export const calculatePortfolioOverTime = (
   transactions: DeGiroTransaction[],
   accountActivities: AccountActivity[] = []
 ): PortfolioSnapshot[] => {
-  // Combine transactions and account activities
-  const allEvents: Array<{ date: Date; value: number }> = [];
-
+  // Track holdings over time to calculate portfolio value properly
+  const holdingsOverTime = new Map<string, { quantity: number; avgPrice: number; isOption: boolean }>();
+  const snapshots: PortfolioSnapshot[] = [];
+  let realizedCash = 0; // Track realized gains/losses from closed positions
+  
+  // Combine transactions and deposits
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  
   // Add transactions
   transactions.forEach((transaction) => {
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
     if (!isNaN(date.getTime())) {
-      allEvents.push({ date, value: transaction.waarde });
+      allEvents.push({ date, type: 'transaction', data: transaction });
     }
   });
-
-  // Add deposits/withdrawals (identified by "ideal" in description)
+  
+  // Add deposits/withdrawals
   accountActivities.forEach((activity) => {
     const date = parse(`${activity.datum} ${activity.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
     if (!isNaN(date.getTime()) && activity.omschrijving.toLowerCase().includes('ideal')) {
-      allEvents.push({ date, value: activity.mutatie });
+      allEvents.push({ date, type: 'deposit', data: activity });
     }
   });
-
+  
   // Sort all events by date
   allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  const snapshots: PortfolioSnapshot[] = [];
-  let runningTotal = 0;
-
+  
   allEvents.forEach((event) => {
-    runningTotal += event.value;
+    if (event.type === 'deposit') {
+      // Deposits add to realized cash
+      realizedCash += event.data.mutatie;
+    } else {
+      // Transaction
+      const transaction = event.data as DeGiroTransaction;
+      const key = `${transaction.isin}-${transaction.product}`;
+      const isOption = isOptionTransaction(transaction);
+      const existing = holdingsOverTime.get(key);
+      
+      if (existing) {
+        const newQuantity = existing.quantity + transaction.aantal;
+        
+        if (newQuantity === 0) {
+          // Position closed - realize the gain/loss
+          const totalCost = existing.quantity * existing.avgPrice;
+          const totalSale = -transaction.aantal * Math.abs(transaction.koers);
+          realizedCash += totalSale - Math.abs(totalCost);
+          holdingsOverTime.delete(key);
+        } else if ((existing.quantity > 0 && newQuantity > 0) || (existing.quantity < 0 && newQuantity < 0)) {
+          // Same direction - update average price
+          const totalCost = existing.quantity * existing.avgPrice + transaction.aantal * Math.abs(transaction.koers);
+          holdingsOverTime.set(key, {
+            quantity: newQuantity,
+            avgPrice: Math.abs(totalCost / newQuantity),
+            isOption,
+          });
+        } else {
+          // Partial close
+          const closedQuantity = existing.quantity > 0 ? Math.min(existing.quantity, -transaction.aantal) : Math.max(existing.quantity, -transaction.aantal);
+          const remainingQuantity = existing.quantity + transaction.aantal;
+          const totalCost = closedQuantity * existing.avgPrice;
+          const totalSale = -closedQuantity * Math.abs(transaction.koers);
+          realizedCash += totalSale - Math.abs(totalCost);
+          
+          if (remainingQuantity !== 0) {
+            holdingsOverTime.set(key, {
+              quantity: remainingQuantity,
+              avgPrice: existing.avgPrice,
+              isOption,
+            });
+          } else {
+            holdingsOverTime.delete(key);
+          }
+        }
+      } else {
+        // New position
+        holdingsOverTime.set(key, {
+          quantity: transaction.aantal,
+          avgPrice: Math.abs(transaction.koers),
+          isOption,
+        });
+      }
+    }
+    
+    // Calculate current portfolio value = realized cash + value of current holdings
+    let holdingsValue = 0;
+    holdingsOverTime.forEach((holding) => {
+      // For unrealized holdings, value = cost basis (what we paid)
+      holdingsValue += Math.abs(holding.quantity * holding.avgPrice);
+    });
+    
+    const portfolioValue = realizedCash + holdingsValue;
+    
     snapshots.push({
       date: event.date,
-      value: runningTotal,
+      value: portfolioValue,
     });
   });
-
+  
   return snapshots;
 };
 
