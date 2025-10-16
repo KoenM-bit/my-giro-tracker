@@ -404,6 +404,8 @@ const Index = () => {
             data={portfolioSnapshots} 
             timeframe={timeframe}
             currentTotalPL={totalPL}
+            transactions={transactions}
+            accountActivities={accountActivities}
           />
         </div>
 

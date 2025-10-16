@@ -1,5 +1,5 @@
 import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot, AccountActivity } from '@/types/transaction';
-import { parse } from 'date-fns';
+import { parse, format } from 'date-fns';
 
 export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioHolding[] => {
   const holdingsMap = new Map<string, PortfolioHolding>();
@@ -280,4 +280,135 @@ export const filterTransactionsByTimeframe = (
     default:
       return transactions;
   }
+};
+
+export interface MonthlyReturn {
+  month: string;
+  realized: number;
+  unrealized: number;
+  total: number;
+}
+
+export const calculateMonthlyReturns = (
+  transactions: DeGiroTransaction[],
+  accountActivities: AccountActivity[] = []
+): MonthlyReturn[] => {
+  const monthlyMap = new Map<string, { realized: number; deposits: number }>();
+  const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
+  
+  // Process transactions to calculate monthly realized P/L
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  
+  transactions.forEach((transaction) => {
+    const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, type: 'transaction', data: transaction });
+    }
+  });
+  
+  accountActivities.forEach((activity) => {
+    const date = parse(`${activity.datum} ${activity.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime()) && activity.omschrijving.toLowerCase().includes('ideal')) {
+      allEvents.push({ date, type: 'deposit', data: activity });
+    }
+  });
+  
+  allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
+  
+  allEvents.forEach((event) => {
+    const monthKey = format(event.date, 'MMM yyyy');
+    
+    if (event.type === 'deposit') {
+      const existing = monthlyMap.get(monthKey) || { realized: 0, deposits: 0 };
+      monthlyMap.set(monthKey, {
+        ...existing,
+        deposits: existing.deposits + event.data.mutatie,
+      });
+    } else {
+      const transaction = event.data as DeGiroTransaction;
+      const key = `${transaction.isin}-${transaction.product}`;
+      const existing = holdingsMap.get(key);
+      
+      if (existing) {
+        const newQuantity = existing.quantity + transaction.aantal;
+        
+        if (newQuantity === 0) {
+          // Position closed - realize P/L
+          const realizedPL = existing.totalCost + transaction.waarde;
+          const monthData = monthlyMap.get(monthKey) || { realized: 0, deposits: 0 };
+          monthlyMap.set(monthKey, {
+            ...monthData,
+            realized: monthData.realized + realizedPL,
+          });
+          holdingsMap.delete(key);
+        } else {
+          holdingsMap.set(key, {
+            totalCost: existing.totalCost + transaction.waarde,
+            quantity: newQuantity,
+          });
+        }
+      } else {
+        holdingsMap.set(key, {
+          totalCost: transaction.waarde,
+          quantity: transaction.aantal,
+        });
+      }
+    }
+  });
+  
+  return Array.from(monthlyMap.entries())
+    .map(([month, data]) => ({
+      month,
+      realized: data.realized,
+      unrealized: 0,
+      total: data.realized,
+    }))
+    .sort((a, b) => {
+      const dateA = parse(a.month, 'MMM yyyy', new Date());
+      const dateB = parse(b.month, 'MMM yyyy', new Date());
+      return dateA.getTime() - dateB.getTime();
+    });
+};
+
+export const calculateYTDPerformance = (
+  transactions: DeGiroTransaction[],
+  accountActivities: AccountActivity[] = []
+): PortfolioSnapshot[] => {
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  
+  // Filter transactions for YTD
+  const ytdTransactions = transactions.filter(t => {
+    const date = parse(`${t.datum} ${t.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    return !isNaN(date.getTime()) && date >= startOfYear;
+  });
+  
+  const ytdActivities = accountActivities.filter(a => {
+    const date = parse(`${a.datum} ${a.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    return !isNaN(date.getTime()) && date >= startOfYear;
+  });
+  
+  return calculatePortfolioOverTime(ytdTransactions, ytdActivities);
+};
+
+export const calculateCumulativeReturns = (
+  transactions: DeGiroTransaction[],
+  accountActivities: AccountActivity[] = []
+): Array<{ date: Date; percentage: number }> => {
+  const snapshots = calculatePortfolioOverTime(transactions, accountActivities);
+  
+  // Calculate total deposits
+  let totalDeposits = 0;
+  accountActivities.forEach(activity => {
+    if (activity.omschrijving.toLowerCase().includes('ideal')) {
+      totalDeposits += activity.mutatie;
+    }
+  });
+  
+  if (totalDeposits === 0) totalDeposits = 1; // Avoid division by zero
+  
+  return snapshots.map(snapshot => ({
+    date: snapshot.date,
+    percentage: ((snapshot.value / totalDeposits) - 1) * 100,
+  }));
 };
