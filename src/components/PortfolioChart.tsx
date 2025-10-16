@@ -3,6 +3,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { PortfolioSnapshot, DeGiroTransaction, AccountActivity } from "@/types/transaction";
 import { format } from "date-fns";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { Button } from "./ui/button";
+import { useState } from "react";
 import { 
   calculateMonthlyReturns, 
   calculateYTDPerformance, 
@@ -19,6 +21,9 @@ interface PortfolioChartProps {
 }
 
 export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize }: PortfolioChartProps) => {
+  const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
+  const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
+
   const formatDate = (date: Date) => {
     if (!date || isNaN(date.getTime())) {
       return "Invalid Date";
@@ -61,10 +66,14 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
     .map((snapshot) => ({
       date: formatDate(snapshot.date),
       value: snapshot.value,
+      percentage: (snapshot.value / portfolioSize) * 100,
     }));
 
   // Monthly returns data
-  const monthlyData = calculateMonthlyReturns(transactions, accountActivities);
+  const monthlyData = calculateMonthlyReturns(transactions, accountActivities).map(item => ({
+    ...item,
+    percentage: (item.realized / portfolioSize) * 100,
+  }));
 
   // Cumulative returns data
   const cumulativeData = calculateCumulativeReturns(transactions, accountActivities, portfolioSize)
@@ -106,42 +115,100 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
         </TabsContent>
 
         <TabsContent value="ytd">
-          <h3 className="text-lg font-semibold mb-4">Year-to-Date Performance</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Year-to-Date Performance</h3>
+            <div className="flex gap-2">
+              <Button
+                variant={ytdViewMode === 'absolute' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setYtdViewMode('absolute')}
+              >
+                € Absolute
+              </Button>
+              <Button
+                variant={ytdViewMode === 'percentage' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setYtdViewMode('percentage')}
+              >
+                % Percentage
+              </Button>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={ytdData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} tickFormatter={formatCurrency} />
+              <YAxis 
+                className="text-xs" 
+                tick={{ fill: "hsl(var(--muted-foreground))" }} 
+                tickFormatter={ytdViewMode === 'absolute' ? formatCurrency : formatPercentage} 
+              />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "0.5rem",
                 }}
-                formatter={(value: number) => [formatCurrency(value), "Value"]}
+                formatter={(value: number, name: string) => {
+                  if (name === 'value' && ytdViewMode === 'absolute') return [formatCurrency(value), "Value"];
+                  if (name === 'percentage' && ytdViewMode === 'percentage') return [formatPercentage(value), "Return %"];
+                  return [value, name];
+                }}
               />
-              <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+              <Line 
+                type="monotone" 
+                dataKey={ytdViewMode === 'absolute' ? 'value' : 'percentage'} 
+                stroke="hsl(var(--primary))" 
+                strokeWidth={2} 
+                dot={false} 
+              />
             </LineChart>
           </ResponsiveContainer>
         </TabsContent>
 
         <TabsContent value="monthly">
-          <h3 className="text-lg font-semibold mb-4">Monthly Returns</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Monthly Returns</h3>
+            <div className="flex gap-2">
+              <Button
+                variant={monthlyViewMode === 'absolute' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setMonthlyViewMode('absolute')}
+              >
+                € Absolute
+              </Button>
+              <Button
+                variant={monthlyViewMode === 'percentage' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setMonthlyViewMode('percentage')}
+              >
+                % Percentage
+              </Button>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={monthlyData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="month" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} tickFormatter={formatCurrency} />
+              <YAxis 
+                className="text-xs" 
+                tick={{ fill: "hsl(var(--muted-foreground))" }} 
+                tickFormatter={monthlyViewMode === 'absolute' ? formatCurrency : formatPercentage} 
+              />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "0.5rem",
                 }}
-                formatter={(value: number) => [formatCurrency(value), "Realized"]}
+                formatter={(value: number, name: string) => {
+                  if (name === 'realized' && monthlyViewMode === 'absolute') return [formatCurrency(value), "Realized"];
+                  if (name === 'percentage' && monthlyViewMode === 'percentage') return [formatPercentage(value), "Return %"];
+                  return [value, name];
+                }}
               />
               <Bar 
-                dataKey="realized" 
+                dataKey={monthlyViewMode === 'absolute' ? 'realized' : 'percentage'} 
                 fill="hsl(var(--primary))" 
                 radius={[4, 4, 0, 0]}
               />
