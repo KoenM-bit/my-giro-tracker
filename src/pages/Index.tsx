@@ -117,6 +117,22 @@ const Index = () => {
         }));
         setAccountActivities(mappedActivities);
       }
+
+      // Load current prices
+      const { data: pricesData, error: pricesError } = await supabase
+        .from('current_prices')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (pricesError) throw pricesError;
+
+      if (pricesData) {
+        const pricesMap = new Map<string, number>();
+        pricesData.forEach(p => {
+          pricesMap.set(p.isin, Number(p.current_price));
+        });
+        setCurrentPrices(pricesMap);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Failed to load data from database');
@@ -215,17 +231,36 @@ const Index = () => {
     });
   };
 
-  const handlePriceUpdate = (isin: string, product: string, price: number) => {
-    const key = `${isin}-${product}`;
-    setCurrentPrices(prev => new Map(prev).set(key, price));
+  const handlePriceUpdate = async (isin: string, product: string, price: number) => {
+    setCurrentPrices(prev => new Map(prev).set(isin, price));
+    
+    // Save to database
+    if (user) {
+      try {
+        const { error } = await supabase
+          .from('current_prices')
+          .upsert({
+            user_id: user.id,
+            isin: isin,
+            current_price: price,
+          }, {
+            onConflict: 'user_id,isin'
+          });
+
+        if (error) throw error;
+        toast.success('Price saved');
+      } catch (error) {
+        console.error('Error saving price:', error);
+        toast.error('Failed to save price');
+      }
+    }
   };
 
   const filteredTransactions = filterTransactionsByTimeframe(transactions, timeframe);
   const allHoldings = calculateHoldings(transactions).map(holding => {
-    const key = `${holding.isin}-${holding.product}`;
     return {
       ...holding,
-      currentPrice: currentPrices.get(key),
+      currentPrice: currentPrices.get(holding.isin),
     };
   });
   const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));

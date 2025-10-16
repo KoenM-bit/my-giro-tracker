@@ -71,6 +71,33 @@ export type Database = {
         }
         Relationships: []
       }
+      current_prices: {
+        Row: {
+          created_at: string
+          current_price: number
+          id: string
+          isin: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_price: number
+          id?: string
+          isin: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_price?: number
+          id?: string
+          isin?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           aantal: number
