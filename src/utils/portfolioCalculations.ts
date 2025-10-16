@@ -99,19 +99,70 @@ export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
   optionsPL: number;
   stocksPL: number;
   totalPL: number;
+  optionsRealized: number;
+  optionsUnrealized: number;
+  stocksRealized: number;
+  stocksUnrealized: number;
 } => {
-  const optionsTransactions = transactions.filter(isOptionTransaction);
-  const stocksTransactions = transactions.filter(t => !isOptionTransaction(t));
+  // Build holdings map to identify closed vs open positions
+  const holdingsMap = new Map<string, { netCashFlow: number; quantity: number; isOption: boolean }>();
   
-  const optionsPL = optionsTransactions.reduce((sum, t) => sum + t.waarde, 0);
-  const stocksPL = stocksTransactions.reduce((sum, t) => sum + t.waarde, 0);
+  transactions.forEach((transaction) => {
+    const key = `${transaction.isin}-${transaction.product}`;
+    const isOption = isOptionTransaction(transaction);
+    const existing = holdingsMap.get(key);
+    
+    if (existing) {
+      holdingsMap.set(key, {
+        netCashFlow: existing.netCashFlow + transaction.waarde,
+        quantity: existing.quantity + transaction.aantal,
+        isOption: existing.isOption,
+      });
+    } else {
+      holdingsMap.set(key, {
+        netCashFlow: transaction.waarde,
+        quantity: transaction.aantal,
+        isOption,
+      });
+    }
+  });
   
+  // Separate realized (closed positions) from unrealized (open positions)
+  let optionsRealized = 0;
+  let optionsUnrealized = 0;
+  let stocksRealized = 0;
+  let stocksUnrealized = 0;
+  
+  holdingsMap.forEach((holding) => {
+    if (holding.quantity === 0) {
+      // Closed position = realized P/L
+      if (holding.isOption) {
+        optionsRealized += holding.netCashFlow;
+      } else {
+        stocksRealized += holding.netCashFlow;
+      }
+    } else {
+      // Open position = unrealized P/L
+      if (holding.isOption) {
+        optionsUnrealized += holding.netCashFlow;
+      } else {
+        stocksUnrealized += holding.netCashFlow;
+      }
+    }
+  });
+  
+  const optionsPL = optionsRealized + optionsUnrealized;
+  const stocksPL = stocksRealized + stocksUnrealized;
   const totalCosts = calculateTotalCosts(transactions);
   
   return {
     optionsPL,
     stocksPL,
     totalPL: optionsPL + stocksPL - totalCosts,
+    optionsRealized,
+    optionsUnrealized,
+    stocksRealized,
+    stocksUnrealized,
   };
 };
 

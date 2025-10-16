@@ -65,7 +65,15 @@ const Index = () => {
   const totalValue = calculatePortfolioValue(transactions);
   const totalCosts = calculateTotalCosts(transactions);
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities);
-  const { optionsPL, stocksPL, totalPL } = calculateProfitLossByType(transactions);
+  const { 
+    optionsPL, 
+    stocksPL, 
+    totalPL, 
+    optionsRealized, 
+    optionsUnrealized, 
+    stocksRealized, 
+    stocksUnrealized 
+  } = calculateProfitLossByType(transactions);
 
   if (transactions.length === 0 && accountActivities.length === 0) {
     return (
@@ -146,6 +154,10 @@ const Index = () => {
             optionsPL={optionsPL}
             stocksPL={stocksPL}
             totalPL={totalPL}
+            optionsRealized={optionsRealized}
+            optionsUnrealized={optionsUnrealized}
+            stocksRealized={stocksRealized}
+            stocksUnrealized={stocksUnrealized}
             transactionCount={transactions.length}
           />
         </div>
