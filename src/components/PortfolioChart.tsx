@@ -135,12 +135,74 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
   }));
 
   // Net value chart data from database snapshots
-  const netValueChartData = netValueSnapshots.map(snapshot => ({
-    date: format(new Date(snapshot.timestamp), 'dd MMM HH:mm'),
-    netValue: Number(snapshot.net_value),
-    portfolioValue: Number(snapshot.portfolio_value),
-    borrowedAmount: Number(snapshot.borrowed_amount),
-  }));
+  const processNetValueSnapshots = () => {
+    if (netValueSnapshots.length === 0) return [];
+
+    // Group snapshots by day and take the most recent one per day
+    const snapshotsByDay = new Map<string, any>();
+    
+    netValueSnapshots.forEach(snapshot => {
+      const date = new Date(snapshot.timestamp);
+      const dayKey = format(date, 'yyyy-MM-dd');
+      
+      // If we don't have this day yet, or this snapshot is more recent, use it
+      if (!snapshotsByDay.has(dayKey) || 
+          new Date(snapshot.timestamp) > new Date(snapshotsByDay.get(dayKey).timestamp)) {
+        snapshotsByDay.set(dayKey, snapshot);
+      }
+    });
+
+    // Convert to array and sort by date
+    const dailySnapshots = Array.from(snapshotsByDay.entries())
+      .map(([dayKey, snapshot]) => ({
+        dayKey,
+        ...snapshot
+      }))
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    // Fill missing days with previous day's value
+    if (dailySnapshots.length === 0) return [];
+
+    const filledSnapshots = [];
+    const startDate = new Date(dailySnapshots[0].timestamp);
+    const endDate = new Date(dailySnapshots[dailySnapshots.length - 1].timestamp);
+    
+    let currentDate = new Date(startDate);
+    let lastSnapshot = dailySnapshots[0];
+    let snapshotIndex = 0;
+
+    while (currentDate <= endDate) {
+      const currentDayKey = format(currentDate, 'yyyy-MM-dd');
+      
+      // Check if we have a snapshot for this day
+      if (snapshotIndex < dailySnapshots.length && 
+          dailySnapshots[snapshotIndex].dayKey === currentDayKey) {
+        lastSnapshot = dailySnapshots[snapshotIndex];
+        filledSnapshots.push({
+          date: format(currentDate, 'dd MMM'),
+          netValue: Number(lastSnapshot.net_value),
+          portfolioValue: Number(lastSnapshot.portfolio_value),
+          borrowedAmount: Number(lastSnapshot.borrowed_amount),
+        });
+        snapshotIndex++;
+      } else {
+        // Use previous day's value
+        filledSnapshots.push({
+          date: format(currentDate, 'dd MMM'),
+          netValue: Number(lastSnapshot.net_value),
+          portfolioValue: Number(lastSnapshot.portfolio_value),
+          borrowedAmount: Number(lastSnapshot.borrowed_amount),
+        });
+      }
+      
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return filledSnapshots;
+  };
+
+  const netValueChartData = processNetValueSnapshots();
 
   // Calculate Y-axis domain for net value chart
   const getNetValueDomain = () => {
