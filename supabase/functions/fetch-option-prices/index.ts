@@ -105,9 +105,9 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
     }));
 
     console.log("SCRAPER SAMPLE:", JSON.stringify(sample));
-    
+
     // Log November 2025 options for debugging
-    const novOptions = options.filter(o => o.expiry.includes("November 2025"));
+    const novOptions = options.filter((o) => o.expiry.includes("November 2025"));
     console.log(`Found ${novOptions.length} November 2025 options`);
     if (novOptions.length > 0) {
       console.log("November 2025 samples:", JSON.stringify(novOptions.slice(0, 10)));
@@ -233,15 +233,26 @@ serve(async (req) => {
       }
 
       // Find a matching option on the site (expiry text on page includes extra suffix like "(AEX / AH)")
-      const match = scrapedOptions.find(
-        (opt) => opt.type === parsed.type && opt.strike === parsed.strike && opt.expiry.startsWith(parsed.expiry),
-      );
+      // Helper: normalize "38,000" or "38.00" -> 38.0
+      function normalizeStrike(strike: string): number {
+        return parseFloat(strike.replace(",", "."));
+      }
+
+      // Filter all options with matching expiry (to reduce search space)
+      const candidates = scrapedOptions.filter((o) => o.expiry.startsWith(parsed.expiry));
+
+      const match = candidates.find((opt) => {
+        const sameType = opt.type === parsed.type;
+        const strikeDiff = Math.abs(normalizeStrike(opt.strike) - normalizeStrike(parsed.strike));
+        // Allow small float tolerance (0.01)
+        return sameType && strikeDiff < 0.01;
+      });
 
       if (!match) {
         console.warn(
           `No match found on beursduivel for ${holding.product} -> {${parsed.type} ${parsed.strike} ${parsed.expiry}}`,
         );
-        console.warn(`Available scraped options for debugging:`, scrapedOptions.filter(o => o.type === parsed.type).slice(0, 5));
+        console.warn(`Closest candidates for ${parsed.expiry}:`, JSON.stringify(candidates.slice(0, 10)));
         results.push({ product: holding.product, status: "failed", reason: "no match found" });
         continue;
       }
