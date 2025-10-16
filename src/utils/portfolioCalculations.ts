@@ -244,16 +244,16 @@ export const calculateProfitLossByType = (
     }
   });
   
-  const optionsPL = optionsRealized;
-  const stocksPL = stocksRealized;
+  const optionsPL = optionsRealized + optionsUnrealized;
+  const stocksPL = stocksRealized + stocksUnrealized;
   const totalCosts = calculateTotalCosts(transactions);
-  const totalRealizedPL = optionsRealized + stocksRealized;
+  const totalPL = optionsRealized + optionsUnrealized + stocksRealized + stocksUnrealized;
   
   return {
     optionsPL,
     stocksPL,
     portfolioValue,
-    totalPL: totalRealizedPL - totalCosts,
+    totalPL: totalPL - totalCosts,
     optionsRealized,
     optionsUnrealized,
     stocksRealized,
