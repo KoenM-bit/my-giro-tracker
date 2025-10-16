@@ -115,7 +115,7 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
   });
 
   // YTD chart data
-  const ytdData = calculateYTDPerformance(transactions, accountActivities)
+  const ytdData = calculateYTDPerformance(transactions, accountActivities, dividends)
     .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
     .map((snapshot) => ({
       date: formatDate(snapshot.date),

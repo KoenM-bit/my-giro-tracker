@@ -528,7 +528,7 @@ const Index = () => {
   const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));
   const totalCosts = calculateTotalCosts(transactions);
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities, priceHistory, currentPrices);
-  const realizedPLSnapshots = calculateRealizedPLOverTime(filteredTransactions, accountActivities);
+  const realizedPLSnapshots = calculateRealizedPLOverTime(filteredTransactions, accountActivities, dividends);
   const { 
     optionsPL, 
     stocksPL,

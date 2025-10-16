@@ -41,15 +41,16 @@ export const calculatePortfolioValue = (transactions: DeGiroTransaction[]): numb
 
 export const calculateRealizedPLOverTime = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  dividends: Dividend[] = []
 ): PortfolioSnapshot[] => {
   // Track holdings to identify when positions are closed and realize P/L
   const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
   const snapshots: PortfolioSnapshot[] = [];
   let realizedValue = 0; // Track deposits + realized P/L only
   
-  // Combine transaction and deposit events
-  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  // Combine transaction, deposit, and dividend events
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit' | 'dividend'; data: any }> = [];
   
   transactions.forEach((transaction) => {
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
@@ -65,12 +66,22 @@ export const calculateRealizedPLOverTime = (
     }
   });
   
+  dividends.forEach((dividend) => {
+    const date = parse(dividend.date, 'dd-MM-yyyy', new Date());
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, type: 'dividend', data: dividend });
+    }
+  });
+  
   allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
   
   allEvents.forEach((event) => {
     if (event.type === 'deposit') {
       // Deposits add to realized value
       realizedValue += event.data.mutatie;
+    } else if (event.type === 'dividend') {
+      // Dividends add to realized value
+      realizedValue += event.data.amount;
     } else {
       // Transaction - only affects realized value when position closes
       const transaction = event.data as DeGiroTransaction;
@@ -657,7 +668,8 @@ export const calculateMonthlyReturns = (
 
 export const calculateYTDPerformance = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  dividends: Dividend[] = []
 ): PortfolioSnapshot[] => {
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -673,7 +685,12 @@ export const calculateYTDPerformance = (
     return !isNaN(date.getTime()) && date >= startOfYear;
   });
   
-  return calculatePortfolioOverTime(ytdTransactions, ytdActivities);
+  const ytdDividends = dividends.filter(d => {
+    const date = parse(d.date, 'dd-MM-yyyy', new Date());
+    return !isNaN(date.getTime()) && date >= startOfYear;
+  });
+  
+  return calculateRealizedPLOverTime(ytdTransactions, ytdActivities, ytdDividends);
 };
 
 export const calculateCumulativeReturns = (
