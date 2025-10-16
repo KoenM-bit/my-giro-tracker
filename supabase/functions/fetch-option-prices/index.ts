@@ -117,6 +117,7 @@ function matchOptionToHolding(holding: OptionHolding) {
   const match = product.match(pattern);
   if (!match) {
     console.warn(`Could not parse option from product: ${product}`);
+    console.warn(`RAW PRODUCT STRING: [${product}]`);
     return null;
   }
 
