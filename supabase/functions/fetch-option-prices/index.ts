@@ -44,11 +44,13 @@ const monthMap: Record<string, string> = {
   MAR: "Maart",
   APR: "April",
   MAY: "Mei",
+  MAI: "Mei",
   JUN: "Juni",
   JUL: "Juli",
   AUG: "Augustus",
   SEP: "September",
   OCT: "Oktober",
+  OKT: "Oktober",
   NOV: "November",
   DEC: "December",
 };
@@ -103,6 +105,13 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
     }));
 
     console.log("SCRAPER SAMPLE:", JSON.stringify(sample));
+    
+    // Log November 2025 options for debugging
+    const novOptions = options.filter(o => o.expiry.includes("November 2025"));
+    console.log(`Found ${novOptions.length} November 2025 options`);
+    if (novOptions.length > 0) {
+      console.log("November 2025 samples:", JSON.stringify(novOptions.slice(0, 10)));
+    }
 
     return options;
   } catch (err) {
@@ -152,7 +161,7 @@ function matchOptionToHolding(holding: OptionHolding) {
   if (m) {
     const [, typeLetter, strikeRaw, day, monAbbr, yy] = m;
     type = typeLetter.toUpperCase() === "C" ? "Call" : "Put";
-    strike = strikeRaw.replace(".", ","); // scraped site uses comma decimals
+    strike = strikeRaw.replace(",", ".").replace(".", ","); // normalize to comma decimals
     const monthName = monthMap[monAbbr] ?? monAbbr;
     expiry = `${monthName} 20${yy}`;
     console.log(
@@ -165,7 +174,7 @@ function matchOptionToHolding(holding: OptionHolding) {
   if (m) {
     const [, typeWord, strikeRaw, , mm, yyyy] = m; // day ignored
     type = typeWord[0].toUpperCase() + typeWord.slice(1).toLowerCase(); // Call/Put
-    strike = strikeRaw.replace(".", ",");
+    strike = strikeRaw.replace(",", ".").replace(".", ",");
     const monthIdx = parseInt(mm, 10) - 1;
     const months = [
       "Januari",
@@ -232,6 +241,7 @@ serve(async (req) => {
         console.warn(
           `No match found on beursduivel for ${holding.product} -> {${parsed.type} ${parsed.strike} ${parsed.expiry}}`,
         );
+        console.warn(`Available scraped options for debugging:`, scrapedOptions.filter(o => o.type === parsed.type).slice(0, 5));
         results.push({ product: holding.product, status: "failed", reason: "no match found" });
         continue;
       }
