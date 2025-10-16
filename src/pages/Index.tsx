@@ -182,11 +182,43 @@ const Index = () => {
         return;
       }
       
-      // Save to database using upsert to prevent duplicates
+      // Save to database - check for duplicates by comparing with existing data
       if (user) {
-        console.log('Upserting transactions to database...');
-        const { data, error, count } = await supabase.from('transactions').upsert(
-          parsedTransactions.map(t => ({
+        console.log('Fetching existing transactions to check for duplicates...');
+        
+        // Get all existing transactions for this user
+        const { data: existingTransactions, error: fetchError } = await supabase
+          .from('transactions')
+          .select('datum, tijd, product, isin, aantal, koers, waarde, totaal, transactiekosten')
+          .eq('user_id', user.id);
+
+        if (fetchError) throw fetchError;
+
+        // Create a Set of fingerprints from existing transactions
+        const existingFingerprints = new Set(
+          existingTransactions?.map(t => 
+            `${t.datum}|${t.tijd}|${t.product}|${t.isin}|${t.aantal}|${t.koers}|${t.waarde}|${t.totaal}|${t.transactiekosten}`
+          ) || []
+        );
+
+        console.log(`Found ${existingFingerprints.size} existing transaction fingerprints`);
+
+        // Filter out transactions that already exist
+        const newTransactions = parsedTransactions.filter(t => {
+          const fingerprint = `${t.datum}|${t.tijd}|${t.product}|${t.isin}|${t.aantal}|${t.koers}|${t.waarde}|${t.totaal}|${t.transactiekosten}`;
+          return !existingFingerprints.has(fingerprint);
+        });
+
+        console.log(`${newTransactions.length} new transactions to import (${parsedTransactions.length - newTransactions.length} duplicates skipped)`);
+
+        if (newTransactions.length === 0) {
+          toast.info('No new transactions to import - all already exist in database');
+          return;
+        }
+
+        console.log('Inserting new transactions to database...');
+        const { error: insertError } = await supabase.from('transactions').insert(
+          newTransactions.map(t => ({
             user_id: user.id,
             datum: t.datum,
             tijd: t.tijd,
@@ -207,21 +239,17 @@ const Index = () => {
             totaal: t.totaal,
             totaal_currency: t.totaalCurrency,
             order_id: t.orderId,
-          })),
-          {
-            onConflict: 'user_id,datum,tijd,product,isin,aantal,koers,waarde,totaal,transactiekosten',
-            ignoreDuplicates: true
-          }
+          }))
         );
 
-        if (error) {
-          console.error('Database error:', error);
-          throw error;
+        if (insertError) {
+          console.error('Database error:', insertError);
+          throw insertError;
         }
         
-        console.log('Successfully upserted transactions, reloading data...');
+        console.log('Successfully inserted transactions, reloading data...');
         await loadDataFromDatabase(user.id);
-        toast.success(`Successfully imported ${parsedTransactions.length} transactions (duplicates skipped)`);
+        toast.success(`Successfully imported ${newTransactions.length} new transactions (${parsedTransactions.length - newTransactions.length} duplicates skipped)`);
       }
     } catch (error) {
       console.error('Error in handleFileSelect:', error);
