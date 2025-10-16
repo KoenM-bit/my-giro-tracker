@@ -8,10 +8,11 @@ import { HoldingsTable } from '@/components/HoldingsTable';
 import { TransactionTable } from '@/components/TransactionTable';
 import { TimeframeSelector } from '@/components/TimeframeSelector';
 import { SettingsDialog } from '@/components/SettingsDialog';
+import { DividendManager } from '@/components/DividendManager';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { DeGiroTransaction, AccountActivity, PriceHistory } from '@/types/transaction';
+import { DeGiroTransaction, AccountActivity, PriceHistory, Dividend } from '@/types/transaction';
 import { parseDeGiroCSV, parseAccountActivityCSV } from '@/utils/csvParser';
 import {
   calculateHoldings,
@@ -33,6 +34,7 @@ const Index = () => {
   const [transactions, setTransactions] = useState<DeGiroTransaction[]>([]);
   const [accountActivities, setAccountActivities] = useState<AccountActivity[]>([]);
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
+  const [dividends, setDividends] = useState<Dividend[]>([]);
   const [timeframe, setTimeframe] = useState('ALL');
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
   const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
@@ -167,6 +169,29 @@ const Index = () => {
           created_at: h.created_at,
         }));
         setPriceHistory(mappedHistory);
+      }
+
+      // Load dividends
+      const { data: dividendsData, error: dividendsError } = await supabase
+        .from('dividends')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false });
+
+      if (dividendsError) throw dividendsError;
+
+      if (dividendsData) {
+        const mappedDividends: Dividend[] = dividendsData.map(d => ({
+          id: d.id,
+          user_id: d.user_id,
+          amount: Number(d.amount),
+          date: d.date,
+          description: d.description,
+          isin: d.isin,
+          product: d.product,
+          created_at: d.created_at,
+        }));
+        setDividends(mappedDividends);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -450,6 +475,49 @@ const Index = () => {
     }
   };
 
+  const handleAddDividend = async (amount: number, date: string, description?: string) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('dividends')
+        .insert({
+          user_id: user.id,
+          amount: amount,
+          date: date,
+          description: description,
+        });
+
+      if (error) throw error;
+      
+      await loadDataFromDatabase(user.id);
+      toast.success('Dividend added successfully');
+    } catch (error) {
+      console.error('Error adding dividend:', error);
+      toast.error('Failed to add dividend');
+    }
+  };
+
+  const handleDeleteDividend = async (id: string) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('dividends')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      
+      await loadDataFromDatabase(user.id);
+      toast.success('Dividend deleted successfully');
+    } catch (error) {
+      console.error('Error deleting dividend:', error);
+      toast.error('Failed to delete dividend');
+    }
+  };
+
   const filteredTransactions = filterTransactionsByTimeframe(transactions, timeframe);
   const allHoldings = calculateHoldings(transactions).map(holding => {
     return {
@@ -579,6 +647,14 @@ const Index = () => {
             transactionCount={transactions.length}
             borrowedAmount={borrowedAmount}
           />
+
+          <div className="mt-4">
+            <DividendManager
+              dividends={dividends}
+              onAddDividend={handleAddDividend}
+              onDeleteDividend={handleDeleteDividend}
+            />
+          </div>
         </div>
 
         <div className="mb-8">
@@ -596,6 +672,7 @@ const Index = () => {
             currentTotalPL={totalPL}
             transactions={transactions}
             accountActivities={accountActivities}
+            dividends={dividends}
             portfolioSize={portfolioSize}
             borrowedAmount={borrowedAmount}
             totalValue={portfolioValue}

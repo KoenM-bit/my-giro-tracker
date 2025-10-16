@@ -61,3 +61,14 @@ export interface PriceHistory {
   timestamp: string;
   created_at: string;
 }
+
+export interface Dividend {
+  id: string;
+  user_id: string;
+  amount: number;
+  date: string;
+  description?: string;
+  isin?: string;
+  product?: string;
+  created_at: string;
+}

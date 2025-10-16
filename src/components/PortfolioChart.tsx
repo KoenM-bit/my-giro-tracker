@@ -1,6 +1,6 @@
 import { Card } from "./ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { PortfolioSnapshot, DeGiroTransaction, AccountActivity } from "@/types/transaction";
+import { PortfolioSnapshot, DeGiroTransaction, AccountActivity, Dividend } from "@/types/transaction";
 import { format } from "date-fns";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Button } from "./ui/button";
@@ -19,12 +19,13 @@ interface PortfolioChartProps {
   currentTotalPL?: number;
   transactions: DeGiroTransaction[];
   accountActivities: AccountActivity[];
+  dividends: Dividend[];
   portfolioSize: number;
   borrowedAmount: number;
   totalValue: number;
 }
 
-export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize, borrowedAmount, totalValue }: PortfolioChartProps) => {
+export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, transactions, accountActivities, dividends, portfolioSize, borrowedAmount, totalValue }: PortfolioChartProps) => {
   const [realizedViewMode, setRealizedViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [realizedLineMode, setRealizedLineMode] = useState<'realized' | 'unrealized' | 'both'>('both');
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
@@ -123,13 +124,13 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
     }));
 
   // Monthly returns data
-  const monthlyData = calculateMonthlyReturns(transactions, accountActivities).map(item => ({
+  const monthlyData = calculateMonthlyReturns(transactions, accountActivities, dividends).map(item => ({
     ...item,
     percentage: (item.realized / netPortfolioValue) * 100,
   }));
 
   // Yearly returns data
-  const yearlyData = calculateYearlyReturns(transactions, accountActivities).map(item => ({
+  const yearlyData = calculateYearlyReturns(transactions, accountActivities, dividends).map(item => ({
     ...item,
     percentage: (item.realized / netPortfolioValue) * 100,
   }));

@@ -1,4 +1,4 @@
-import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot, AccountActivity, PriceHistory } from '@/types/transaction';
+import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot, AccountActivity, PriceHistory, Dividend } from '@/types/transaction';
 import { parse, format } from 'date-fns';
 
 export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioHolding[] => {
@@ -463,13 +463,14 @@ export interface YearlyReturn {
 
 export const calculateYearlyReturns = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  dividends: Dividend[] = []
 ): YearlyReturn[] => {
-  const yearlyMap = new Map<string, { realized: number; deposits: number }>();
+  const yearlyMap = new Map<string, { realized: number; deposits: number; dividends: number }>();
   const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
   
   // Process transactions to calculate yearly realized P/L
-  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit' | 'dividend'; data: any }> = [];
   
   transactions.forEach((transaction) => {
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
@@ -485,16 +486,29 @@ export const calculateYearlyReturns = (
     }
   });
   
+  dividends.forEach((dividend) => {
+    const date = parse(dividend.date, 'dd-MM-yyyy', new Date());
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, type: 'dividend', data: dividend });
+    }
+  });
+  
   allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
   
   allEvents.forEach((event) => {
     const yearKey = format(event.date, 'yyyy');
     
     if (event.type === 'deposit') {
-      const existing = yearlyMap.get(yearKey) || { realized: 0, deposits: 0 };
+      const existing = yearlyMap.get(yearKey) || { realized: 0, deposits: 0, dividends: 0 };
       yearlyMap.set(yearKey, {
         ...existing,
         deposits: existing.deposits + event.data.mutatie,
+      });
+    } else if (event.type === 'dividend') {
+      const existing = yearlyMap.get(yearKey) || { realized: 0, deposits: 0, dividends: 0 };
+      yearlyMap.set(yearKey, {
+        ...existing,
+        dividends: existing.dividends + event.data.amount,
       });
     } else {
       const transaction = event.data as DeGiroTransaction;
@@ -507,7 +521,7 @@ export const calculateYearlyReturns = (
         if (newQuantity === 0) {
           // Position closed - realize P/L
           const realizedPL = existing.totalCost + transaction.waarde;
-          const yearData = yearlyMap.get(yearKey) || { realized: 0, deposits: 0 };
+          const yearData = yearlyMap.get(yearKey) || { realized: 0, deposits: 0, dividends: 0 };
           yearlyMap.set(yearKey, {
             ...yearData,
             realized: yearData.realized + realizedPL,
@@ -531,9 +545,9 @@ export const calculateYearlyReturns = (
   return Array.from(yearlyMap.entries())
     .map(([year, data]) => ({
       year,
-      realized: data.realized,
+      realized: data.realized + data.dividends,
       unrealized: 0,
-      total: data.realized,
+      total: data.realized + data.dividends,
     }))
     .sort((a, b) => {
       return parseInt(a.year) - parseInt(b.year);
@@ -542,13 +556,14 @@ export const calculateYearlyReturns = (
 
 export const calculateMonthlyReturns = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  dividends: Dividend[] = []
 ): MonthlyReturn[] => {
-  const monthlyMap = new Map<string, { realized: number; deposits: number }>();
+  const monthlyMap = new Map<string, { realized: number; deposits: number; dividends: number }>();
   const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
   
   // Process transactions to calculate monthly realized P/L
-  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit' | 'dividend'; data: any }> = [];
   
   transactions.forEach((transaction) => {
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
@@ -564,16 +579,29 @@ export const calculateMonthlyReturns = (
     }
   });
   
+  dividends.forEach((dividend) => {
+    const date = parse(dividend.date, 'dd-MM-yyyy', new Date());
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, type: 'dividend', data: dividend });
+    }
+  });
+  
   allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
   
   allEvents.forEach((event) => {
     const monthKey = format(event.date, 'MMM yyyy');
     
     if (event.type === 'deposit') {
-      const existing = monthlyMap.get(monthKey) || { realized: 0, deposits: 0 };
+      const existing = monthlyMap.get(monthKey) || { realized: 0, deposits: 0, dividends: 0 };
       monthlyMap.set(monthKey, {
         ...existing,
         deposits: existing.deposits + event.data.mutatie,
+      });
+    } else if (event.type === 'dividend') {
+      const existing = monthlyMap.get(monthKey) || { realized: 0, deposits: 0, dividends: 0 };
+      monthlyMap.set(monthKey, {
+        ...existing,
+        dividends: existing.dividends + event.data.amount,
       });
     } else {
       const transaction = event.data as DeGiroTransaction;
@@ -586,7 +614,7 @@ export const calculateMonthlyReturns = (
         if (newQuantity === 0) {
           // Position closed - realize P/L
           const realizedPL = existing.totalCost + transaction.waarde;
-          const monthData = monthlyMap.get(monthKey) || { realized: 0, deposits: 0 };
+          const monthData = monthlyMap.get(monthKey) || { realized: 0, deposits: 0, dividends: 0 };
           monthlyMap.set(monthKey, {
             ...monthData,
             realized: monthData.realized + realizedPL,
@@ -610,9 +638,9 @@ export const calculateMonthlyReturns = (
   return Array.from(monthlyMap.entries())
     .map(([month, data]) => ({
       month,
-      realized: data.realized,
+      realized: data.realized + data.dividends,
       unrealized: 0,
-      total: data.realized,
+      total: data.realized + data.dividends,
     }))
     .sort((a, b) => {
       const dateA = parse(a.month, 'MMM yyyy', new Date());
