@@ -83,10 +83,40 @@ export const calculateTotalCosts = (transactions: DeGiroTransaction[]): number =
   return transactions.reduce((sum, t) => sum + Math.abs(t.transactiekosten), 0);
 };
 
+export const isOptionTransaction = (transaction: DeGiroTransaction): boolean => {
+  // Options have pattern Cxx or Pxx where xx is at least 2 digits
+  const optionPattern = /[CP]\d{2,}/;
+  return optionPattern.test(transaction.product);
+};
+
 export const calculateProfitLoss = (transactions: DeGiroTransaction[]): number => {
   const netCashFlow = transactions.reduce((sum, t) => sum + t.waarde, 0);
   const totalCosts = calculateTotalCosts(transactions);
   return netCashFlow - totalCosts;
+};
+
+export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
+  optionsPL: number;
+  stocksPL: number;
+  totalPL: number;
+} => {
+  const optionsTransactions = transactions.filter(isOptionTransaction);
+  const stocksTransactions = transactions.filter(t => !isOptionTransaction(t));
+  
+  const optionsNetCashFlow = optionsTransactions.reduce((sum, t) => sum + t.waarde, 0);
+  const stocksNetCashFlow = stocksTransactions.reduce((sum, t) => sum + t.waarde, 0);
+  
+  const optionsCosts = optionsTransactions.reduce((sum, t) => sum + Math.abs(t.transactiekosten), 0);
+  const stocksCosts = stocksTransactions.reduce((sum, t) => sum + Math.abs(t.transactiekosten), 0);
+  
+  const optionsPL = optionsNetCashFlow - optionsCosts;
+  const stocksPL = stocksNetCashFlow - stocksCosts;
+  
+  return {
+    optionsPL,
+    stocksPL,
+    totalPL: optionsPL + stocksPL,
+  };
 };
 
 export const filterTransactionsByTimeframe = (

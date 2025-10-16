@@ -1,21 +1,26 @@
 import { Card } from './ui/card';
-import { TrendingUp, TrendingDown, Wallet, Receipt } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Receipt, LineChart } from 'lucide-react';
 
 interface PortfolioOverviewProps {
   totalValue: number;
   totalCosts: number;
-  profitLoss: number;
+  optionsPL: number;
+  stocksPL: number;
+  totalPL: number;
   transactionCount: number;
 }
 
 export const PortfolioOverview = ({
   totalValue,
   totalCosts,
-  profitLoss,
+  optionsPL,
+  stocksPL,
+  totalPL,
   transactionCount,
 }: PortfolioOverviewProps) => {
-  const isProfit = profitLoss >= 0;
-  const profitLossPercentage = totalValue !== 0 ? (profitLoss / Math.abs(totalValue)) * 100 : 0;
+  const isOptionsProfitable = optionsPL >= 0;
+  const isStocksProfitable = stocksPL >= 0;
+  const isTotalProfitable = totalPL >= 0;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
@@ -25,7 +30,7 @@ export const PortfolioOverview = ({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
       <Card className="p-6">
         <div className="flex items-start justify-between">
           <div>
@@ -41,16 +46,49 @@ export const PortfolioOverview = ({
       <Card className="p-6">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Profit/Loss</p>
-            <h3 className={`text-2xl font-bold mt-2 ${isProfit ? 'text-success' : 'text-destructive'}`}>
-              {formatCurrency(profitLoss)}
+            <p className="text-sm font-medium text-muted-foreground">Options P/L</p>
+            <h3 className={`text-2xl font-bold mt-2 ${isOptionsProfitable ? 'text-success' : 'text-destructive'}`}>
+              {formatCurrency(optionsPL)}
             </h3>
-            <p className={`text-sm mt-1 ${isProfit ? 'text-success' : 'text-destructive'}`}>
-              {isProfit ? '+' : ''}{profitLossPercentage.toFixed(2)}%
-            </p>
           </div>
-          <div className={`p-2 rounded-lg ${isProfit ? 'bg-success/10' : 'bg-destructive/10'}`}>
-            {isProfit ? (
+          <div className={`p-2 rounded-lg ${isOptionsProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
+            {isOptionsProfitable ? (
+              <TrendingUp className="w-5 h-5 text-success" />
+            ) : (
+              <TrendingDown className="w-5 h-5 text-destructive" />
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Stocks P/L</p>
+            <h3 className={`text-2xl font-bold mt-2 ${isStocksProfitable ? 'text-success' : 'text-destructive'}`}>
+              {formatCurrency(stocksPL)}
+            </h3>
+          </div>
+          <div className={`p-2 rounded-lg ${isStocksProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
+            {isStocksProfitable ? (
+              <TrendingUp className="w-5 h-5 text-success" />
+            ) : (
+              <TrendingDown className="w-5 h-5 text-destructive" />
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Total P/L</p>
+            <h3 className={`text-2xl font-bold mt-2 ${isTotalProfitable ? 'text-success' : 'text-destructive'}`}>
+              {formatCurrency(totalPL)}
+            </h3>
+          </div>
+          <div className={`p-2 rounded-lg ${isTotalProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
+            {isTotalProfitable ? (
               <TrendingUp className="w-5 h-5 text-success" />
             ) : (
               <TrendingDown className="w-5 h-5 text-destructive" />
@@ -78,7 +116,7 @@ export const PortfolioOverview = ({
             <h3 className="text-2xl font-bold mt-2">{transactionCount}</h3>
           </div>
           <div className="p-2 rounded-lg bg-accent/10">
-            <TrendingUp className="w-5 h-5 text-accent" />
+            <LineChart className="w-5 h-5 text-accent" />
           </div>
         </div>
       </Card>
