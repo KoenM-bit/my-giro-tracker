@@ -98,6 +98,36 @@ export type Database = {
         }
         Relationships: []
       }
+      portfolio_snapshots: {
+        Row: {
+          borrowed_amount: number
+          created_at: string
+          id: string
+          net_value: number
+          portfolio_value: number
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          borrowed_amount?: number
+          created_at?: string
+          id?: string
+          net_value: number
+          portfolio_value: number
+          timestamp?: string
+          user_id: string
+        }
+        Update: {
+          borrowed_amount?: number
+          created_at?: string
+          id?: string
+          net_value?: number
+          portfolio_value?: number
+          timestamp?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       price_history: {
         Row: {
           created_at: string

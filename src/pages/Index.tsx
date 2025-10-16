@@ -8,6 +8,7 @@ import { HoldingsTable } from '@/components/HoldingsTable';
 import { TransactionTable } from '@/components/TransactionTable';
 import { TimeframeSelector } from '@/components/TimeframeSelector';
 import { SettingsDialog } from '@/components/SettingsDialog';
+import { NetValueChart } from '@/components/NetValueChart';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -252,6 +253,10 @@ const Index = () => {
         
         console.log('Successfully inserted transactions, reloading data...');
         await loadDataFromDatabase(user.id);
+        
+        // Save portfolio snapshot after loading new transactions
+        await savePortfolioSnapshot(user.id);
+        
         toast.success(`Successfully imported ${newTransactions.length} new transactions (${parsedTransactions.length - newTransactions.length} duplicates skipped)`);
       }
     } catch (error) {
@@ -317,6 +322,10 @@ const Index = () => {
 
         if (insertError) throw insertError;
         await loadDataFromDatabase(user.id);
+        
+        // Save portfolio snapshot after loading new account activities
+        await savePortfolioSnapshot(user.id);
+        
         toast.success(`Successfully imported ${newActivities.length} new account activities (${parsedActivities.length - newActivities.length} duplicates skipped)`);
       }
     } catch (error) {
@@ -403,11 +412,42 @@ const Index = () => {
           setPriceHistory(mappedHistory);
         }
 
+        // Save portfolio snapshot after price update
+        await savePortfolioSnapshot(user.id);
+
         toast.success('Price saved and tracked');
       } catch (error) {
         console.error('Error saving price:', error);
         toast.error('Failed to save price');
       }
+    }
+  };
+
+  const savePortfolioSnapshot = async (userId: string) => {
+    try {
+      // Calculate current portfolio value
+      const currentHoldings = calculateHoldings(transactions).map(holding => ({
+        ...holding,
+        currentPrice: currentPrices.get(holding.isin),
+      }));
+      
+      const { portfolioValue: calcPortfolioValue } = calculateProfitLossByType(transactions, currentHoldings);
+      const netValue = calcPortfolioValue - borrowedAmount;
+
+      const { error } = await supabase
+        .from('portfolio_snapshots')
+        .insert({
+          user_id: userId,
+          portfolio_value: calcPortfolioValue,
+          borrowed_amount: borrowedAmount,
+          net_value: netValue,
+        });
+
+      if (error) {
+        console.error('Error saving portfolio snapshot:', error);
+      }
+    } catch (error) {
+      console.error('Error in savePortfolioSnapshot:', error);
     }
   };
 
@@ -540,6 +580,10 @@ const Index = () => {
             transactionCount={transactions.length}
             borrowedAmount={borrowedAmount}
           />
+        </div>
+
+        <div className="mb-8">
+          <NetValueChart />
         </div>
 
         <div className="mb-8">
