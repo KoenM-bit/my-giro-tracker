@@ -3,8 +3,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { PortfolioHolding } from '@/types/transaction';
 import { Checkbox } from './ui/checkbox';
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useState } from 'react';
+import { ScenarioAnalysis } from './ScenarioAnalysis';
+import { TrendingUp } from 'lucide-react';
 
 interface HoldingsTableProps {
   holdings: PortfolioHolding[];
@@ -16,6 +19,8 @@ interface HoldingsTableProps {
 export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, onPriceUpdate }: HoldingsTableProps) => {
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string>('');
+  const [scenarioOpen, setScenarioOpen] = useState(false);
+  const [scenarioStock, setScenarioStock] = useState<string>('');
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
@@ -43,6 +48,29 @@ export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, o
     return null;
   };
 
+  const isStock = (product: string) => {
+    return !/[CP]\d{2,}/.test(product);
+  };
+
+  const hasOptionsForStock = (stockProduct: string) => {
+    // Check if there are options that match this stock
+    const stockSymbol = stockProduct.split(' ')[0];
+    return holdings.some(h => !isStock(h.product) && h.product.startsWith(stockSymbol));
+  };
+
+  const openScenarioAnalysis = (stockProduct: string) => {
+    setScenarioStock(stockProduct);
+    setScenarioOpen(true);
+  };
+
+  // Get holdings relevant to the scenario (stock + its options)
+  const scenarioHoldings = scenarioStock 
+    ? holdings.filter(h => {
+        const stockSymbol = scenarioStock.split(' ')[0];
+        return h.product === scenarioStock || h.product.startsWith(stockSymbol);
+      })
+    : [];
+
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -58,6 +86,7 @@ export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, o
               <TableHead className="w-12">Include</TableHead>
               <TableHead>Product</TableHead>
               <TableHead>ISIN</TableHead>
+              <TableHead className="w-16"></TableHead>
               <TableHead className="text-right">Quantity</TableHead>
               <TableHead className="text-right">Avg. Price</TableHead>
               <TableHead className="text-right">Current Price</TableHead>
@@ -79,6 +108,19 @@ export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, o
                   </TableCell>
                   <TableCell className="font-medium">{holding.product}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{holding.isin}</TableCell>
+                  <TableCell>
+                    {isStock(holding.product) && hasOptionsForStock(holding.product) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => openScenarioAnalysis(holding.product)}
+                        title="Scenario Analysis"
+                      >
+                        <TrendingUp className="h-4 w-4 text-primary" />
+                      </Button>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">{holding.quantity}</TableCell>
                   <TableCell className="text-right">{formatCurrency(holding.averagePrice)}</TableCell>
                   <TableCell className="text-right">
@@ -131,6 +173,12 @@ export const HoldingsTable = ({ holdings, excludedHoldings, onToggleExclusion, o
           </TableBody>
         </Table>
       </div>
+
+      <ScenarioAnalysis 
+        holdings={scenarioHoldings}
+        open={scenarioOpen}
+        onOpenChange={setScenarioOpen}
+      />
     </Card>
   );
 };

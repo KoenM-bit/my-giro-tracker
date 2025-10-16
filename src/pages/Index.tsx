@@ -7,7 +7,7 @@ import { HoldingsTable } from '@/components/HoldingsTable';
 import { TransactionTable } from '@/components/TransactionTable';
 import { TimeframeSelector } from '@/components/TimeframeSelector';
 import { SettingsDialog } from '@/components/SettingsDialog';
-import { ScenarioAnalysis } from '@/components/ScenarioAnalysis';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DeGiroTransaction, AccountActivity, PriceHistory } from '@/types/transaction';
@@ -605,10 +605,6 @@ const Index = () => {
             <TransactionTable transactions={optionTransactions} />
           </TabsContent>
         </Tabs>
-
-        <div className="mb-8">
-          <ScenarioAnalysis holdings={allHoldings} />
-        </div>
       </div>
     </div>
   );
