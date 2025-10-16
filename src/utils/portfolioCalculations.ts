@@ -83,6 +83,12 @@ export const calculateTotalCosts = (transactions: DeGiroTransaction[]): number =
   return transactions.reduce((sum, t) => sum + Math.abs(t.transactiekosten), 0);
 };
 
+export const calculateProfitLoss = (transactions: DeGiroTransaction[]): number => {
+  const netCashFlow = transactions.reduce((sum, t) => sum + t.waarde, 0);
+  const totalCosts = calculateTotalCosts(transactions);
+  return netCashFlow - totalCosts;
+};
+
 export const filterTransactionsByTimeframe = (
   transactions: DeGiroTransaction[],
   timeframe: string

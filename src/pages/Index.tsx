@@ -14,6 +14,7 @@ import {
   calculatePortfolioOverTime,
   calculateTotalCosts,
   filterTransactionsByTimeframe,
+  calculateProfitLoss,
 } from '@/utils/portfolioCalculations';
 import { toast } from 'sonner';
 import { TrendingUp } from 'lucide-react';
@@ -64,7 +65,7 @@ const Index = () => {
   const totalValue = calculatePortfolioValue(transactions);
   const totalCosts = calculateTotalCosts(transactions);
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities);
-  const profitLoss = totalValue;
+  const profitLoss = calculateProfitLoss(transactions);
 
   if (transactions.length === 0 && accountActivities.length === 0) {
     return (
