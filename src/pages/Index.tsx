@@ -32,8 +32,14 @@ const Index = () => {
   const [timeframe, setTimeframe] = useState('ALL');
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
   const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
-  const [portfolioSize, setPortfolioSize] = useState(50000);
-  const [borrowedAmount, setBorrowedAmount] = useState(0);
+  const [portfolioSize, setPortfolioSize] = useState(() => {
+    const saved = localStorage.getItem('portfolioSize');
+    return saved ? parseFloat(saved) : 50000;
+  });
+  const [borrowedAmount, setBorrowedAmount] = useState(() => {
+    const saved = localStorage.getItem('borrowedAmount');
+    return saved ? parseFloat(saved) : 0;
+  });
 
   useEffect(() => {
     // Check authentication
@@ -222,6 +228,16 @@ const Index = () => {
     navigate('/auth');
   };
 
+  const handlePortfolioSizeChange = (size: number) => {
+    setPortfolioSize(size);
+    localStorage.setItem('portfolioSize', size.toString());
+  };
+
+  const handleBorrowedAmountChange = (amount: number) => {
+    setBorrowedAmount(amount);
+    localStorage.setItem('borrowedAmount', amount.toString());
+  };
+
   const toggleHoldingExclusion = (key: string) => {
     setExcludedHoldings(prev => {
       const newSet = new Set(prev);
@@ -359,9 +375,9 @@ const Index = () => {
             <div className="flex gap-2">
               <SettingsDialog 
                 portfolioSize={portfolioSize}
-                onPortfolioSizeChange={setPortfolioSize}
+                onPortfolioSizeChange={handlePortfolioSizeChange}
                 borrowedAmount={borrowedAmount}
-                onBorrowedAmountChange={setBorrowedAmount}
+                onBorrowedAmountChange={handleBorrowedAmountChange}
               />
               <Button onClick={handleLogout} variant="outline" size="sm">
                 <LogOut className="w-4 h-4 mr-2" />
