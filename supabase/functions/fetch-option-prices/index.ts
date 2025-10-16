@@ -150,20 +150,6 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const authHeader = req.headers.get('Authorization')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    // Get user from auth header
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('Unauthorized');
-    }
-
     const { holdings } = await req.json();
     
     if (!Array.isArray(holdings) || holdings.length === 0) {
@@ -228,34 +214,12 @@ serve(async (req) => {
           continue;
         }
 
-        // Update or insert current price
-        const { error: upsertError } = await supabase
-          .from('current_prices')
-          .upsert({
-            user_id: user.id,
-            isin: holding.isin,
-            current_price: price,
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'user_id,isin'
-          });
-
-        if (upsertError) {
-          console.error(`Error updating price for ${holding.product}:`, upsertError);
-          results.failed++;
-          results.details.push({ 
-            product: holding.product, 
-            status: 'failed', 
-            reason: 'Database update failed' 
-          });
-          continue;
-        }
-
         results.successful++;
         results.details.push({ 
           product: holding.product, 
           status: 'success', 
-          price 
+          price,
+          priceToStore: price // Store for later DB update
         });
 
         // Add small delay to avoid overwhelming the server
@@ -269,6 +233,56 @@ serve(async (req) => {
           status: 'failed', 
           reason: error instanceof Error ? error.message : 'Unknown error'
         });
+      }
+    }
+
+    // Now authenticate and update database
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('No authorization header');
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    // Get user from JWT
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      throw new Error('Invalid authorization token');
+    }
+
+    // Update database for successful price fetches
+    const successfulResults = results.details.filter(d => d.status === 'success');
+    
+    for (let i = 0; i < successfulResults.length; i++) {
+      const detail = successfulResults[i];
+      const holding = holdings[i];
+      
+      const { error: upsertError } = await supabase
+        .from('current_prices')
+        .upsert({
+          user_id: user.id,
+          isin: holding.isin,
+          current_price: detail.priceToStore,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id,isin'
+        });
+
+      if (upsertError) {
+        console.error(`Error updating price for ${holding.product}:`, upsertError);
+        detail.status = 'failed';
+        detail.reason = 'Database update failed';
+        results.successful--;
+        results.failed++;
       }
     }
 
