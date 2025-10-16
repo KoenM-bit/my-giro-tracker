@@ -173,11 +173,19 @@ const Index = () => {
 
   const handleFileSelect = async (file: File) => {
     try {
+      console.log('Starting CSV parsing...');
       const parsedTransactions = await parseDeGiroCSV(file);
+      console.log(`Parsed ${parsedTransactions.length} transactions`);
+      
+      if (parsedTransactions.length === 0) {
+        toast.error('No transactions found in CSV file');
+        return;
+      }
       
       // Save to database using upsert to prevent duplicates
       if (user) {
-        const { error } = await supabase.from('transactions').upsert(
+        console.log('Upserting transactions to database...');
+        const { data, error, count } = await supabase.from('transactions').upsert(
           parsedTransactions.map(t => ({
             user_id: user.id,
             datum: t.datum,
@@ -206,13 +214,18 @@ const Index = () => {
           }
         );
 
-        if (error) throw error;
+        if (error) {
+          console.error('Database error:', error);
+          throw error;
+        }
+        
+        console.log('Successfully upserted transactions, reloading data...');
         await loadDataFromDatabase(user.id);
         toast.success(`Successfully imported ${parsedTransactions.length} transactions (duplicates skipped)`);
       }
     } catch (error) {
-      console.error('Error parsing CSV:', error);
-      toast.error('Failed to parse CSV file. Please check the format.');
+      console.error('Error in handleFileSelect:', error);
+      toast.error(`Failed to import transactions: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
