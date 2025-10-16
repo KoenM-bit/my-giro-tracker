@@ -91,10 +91,21 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
       }
     }
   }
-  console.log(`Scraped ${options.length} options`);
+  console.log("Scraped", options.length, "options");
 
-  console.log("First 3 options:", JSON.stringify(options.slice(0, 3), null, 2));
+  const sample = options.slice(0, 5).map(o => ({
+    expiry: o.expiry,
+    type: o.type,
+    strike: o.strike,
+    issueId: o.issueId,
+  }));
+
+  console.log("SCRAPER SAMPLE:", JSON.stringify(sample));
+
   return options;
+} catch (err) {
+  console.error("fetchOptionChain error:", err);
+  return [];
 }
 
 async function getLivePrice(option: ScrapedOption): Promise<number | null> {
