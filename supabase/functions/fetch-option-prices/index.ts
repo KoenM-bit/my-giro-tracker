@@ -113,7 +113,7 @@ function matchOptionToHolding(holding: OptionHolding) {
   const product = holding.product.trim();
 
   // Expect format: AH C35.00 21NOV25 or AH P38.00 21NOV25
-  const pattern = /^AH\s+([CP])([\d.]+)\s+(\d{1,2})([A-Z]{3})(\d{2})$/i;
+  const pattern = /^AH\s+([CP])\s*([\d.]+)\s+(\d{1,2})([A-Z]{3})(\d{2})$/i;
   const match = product.match(pattern);
   if (!match) {
     console.warn(`Could not parse option from product: ${product}`);
