@@ -58,6 +58,82 @@ export const PortfolioOverview = ({
 
         <Card className="p-6">
           <div className="flex items-start justify-between">
+            <div className="w-full">
+              <p className="text-sm font-medium text-muted-foreground mb-2">Options P/L</p>
+              <h3 className={`text-2xl font-bold ${isOptionsProfitable ? 'text-success' : 'text-destructive'}`}>
+                {formatCurrency(optionsPL)}
+              </h3>
+              <div className="mt-3 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Realized
+                  </span>
+                  <span className={isOptionsRealizedProfitable ? 'text-success' : 'text-destructive'}>
+                    {formatCurrency(optionsRealized)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Unlock className="w-3 h-3" />
+                    Unrealized
+                  </span>
+                  <span className={isOptionsUnrealizedProfitable ? 'text-success' : 'text-destructive'}>
+                    {formatCurrency(optionsUnrealized)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className={`p-2 rounded-lg ${isOptionsProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
+              {isOptionsProfitable ? (
+                <TrendingUp className="w-5 h-5 text-success" />
+              ) : (
+                <TrendingDown className="w-5 h-5 text-destructive" />
+              )}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="w-full">
+              <p className="text-sm font-medium text-muted-foreground mb-2">Stocks P/L</p>
+              <h3 className={`text-2xl font-bold ${isStocksProfitable ? 'text-success' : 'text-destructive'}`}>
+                {formatCurrency(stocksPL)}
+              </h3>
+              <div className="mt-3 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Realized
+                  </span>
+                  <span className={isStocksRealizedProfitable ? 'text-success' : 'text-destructive'}>
+                    {formatCurrency(stocksRealized)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Unlock className="w-3 h-3" />
+                    Unrealized
+                  </span>
+                  <span className={isStocksUnrealizedProfitable ? 'text-success' : 'text-destructive'}>
+                    {formatCurrency(stocksUnrealized)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className={`p-2 rounded-lg ${isStocksProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
+              {isStocksProfitable ? (
+                <TrendingUp className="w-5 h-5 text-success" />
+              ) : (
+                <TrendingDown className="w-5 h-5 text-destructive" />
+              )}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total P/L</p>
               <h3 className={`text-2xl font-bold mt-2 ${isTotalProfitable ? 'text-success' : 'text-destructive'}`}>
@@ -73,7 +149,9 @@ export const PortfolioOverview = ({
             </div>
           </div>
         </Card>
+      </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
@@ -94,64 +172,6 @@ export const PortfolioOverview = ({
             </div>
             <div className="p-2 rounded-lg bg-accent/10">
               <LineChart className="w-5 h-5 text-accent" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Options Realized</p>
-              <h3 className={`text-2xl font-bold mt-2 ${isOptionsRealizedProfitable ? 'text-success' : 'text-destructive'}`}>
-                {formatCurrency(optionsRealized)}
-              </h3>
-            </div>
-            <div className={`p-2 rounded-lg ${isOptionsRealizedProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
-              <Lock className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Options Unrealized</p>
-              <h3 className={`text-2xl font-bold mt-2 ${isOptionsUnrealizedProfitable ? 'text-success' : 'text-destructive'}`}>
-                {formatCurrency(optionsUnrealized)}
-              </h3>
-            </div>
-            <div className={`p-2 rounded-lg ${isOptionsUnrealizedProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
-              <Unlock className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Stocks Realized</p>
-              <h3 className={`text-2xl font-bold mt-2 ${isStocksRealizedProfitable ? 'text-success' : 'text-destructive'}`}>
-                {formatCurrency(stocksRealized)}
-              </h3>
-            </div>
-            <div className={`p-2 rounded-lg ${isStocksRealizedProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
-              <Lock className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Stocks Unrealized</p>
-              <h3 className={`text-2xl font-bold mt-2 ${isStocksUnrealizedProfitable ? 'text-success' : 'text-destructive'}`}>
-                {formatCurrency(stocksUnrealized)}
-              </h3>
-            </div>
-            <div className={`p-2 rounded-lg ${isStocksUnrealizedProfitable ? 'bg-success/10' : 'bg-destructive/10'}`}>
-              <Unlock className="w-5 h-5" />
             </div>
           </div>
         </Card>
