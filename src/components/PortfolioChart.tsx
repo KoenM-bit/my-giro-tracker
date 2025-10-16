@@ -7,8 +7,8 @@ import { Button } from "./ui/button";
 import { useState } from "react";
 import { 
   calculateMonthlyReturns, 
-  calculateYTDPerformance, 
-  calculateCumulativeReturns 
+  calculateYTDPerformance,
+  calculateYearlyReturns
 } from "@/utils/portfolioCalculations";
 
 interface PortfolioChartProps {
@@ -22,6 +22,7 @@ interface PortfolioChartProps {
 
 export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize }: PortfolioChartProps) => {
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
+  const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
 
   const formatDate = (date: Date) => {
@@ -75,14 +76,13 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
     percentage: (item.realized / portfolioSize) * 100,
   }));
 
-  // Cumulative returns data
-  const cumulativeData = calculateCumulativeReturns(transactions, accountActivities, portfolioSize)
-    .filter((item) => item.date && !isNaN(item.date.getTime()))
-    .map((item) => ({
-      date: formatDate(item.date),
-      percentage: item.percentage,
-      value: item.value,
-    }));
+  // Yearly returns data
+  const yearlyData = calculateYearlyReturns(transactions, accountActivities).map(item => ({
+    ...item,
+    percentage: (item.realized / portfolioSize) * 100,
+  }));
+
+  // Cumulative returns data - removed as it's redundant with YTD percentage
 
   return (
     <Card className="p-6">
@@ -91,7 +91,7 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
           <TabsTrigger value="realized">Realized P/L</TabsTrigger>
           <TabsTrigger value="ytd">YTD</TabsTrigger>
           <TabsTrigger value="monthly">Monthly Returns</TabsTrigger>
-          <TabsTrigger value="cumulative">Cumulative %</TabsTrigger>
+          <TabsTrigger value="yearly">Yearly Returns</TabsTrigger>
         </TabsList>
 
         <TabsContent value="realized">
@@ -216,15 +216,35 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
           </ResponsiveContainer>
         </TabsContent>
 
-        <TabsContent value="cumulative">
-          <h3 className="text-lg font-semibold mb-4">
-            Portfolio Performance (Base: {formatCurrency(portfolioSize)})
-          </h3>
+        <TabsContent value="yearly">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Yearly Returns</h3>
+            <div className="flex gap-2">
+              <Button
+                variant={yearlyViewMode === 'absolute' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setYearlyViewMode('absolute')}
+              >
+                € Absolute
+              </Button>
+              <Button
+                variant={yearlyViewMode === 'percentage' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setYearlyViewMode('percentage')}
+              >
+                % Percentage
+              </Button>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={cumulativeData}>
+            <BarChart data={yearlyData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} tickFormatter={formatPercentage} />
+              <XAxis dataKey="year" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis 
+                className="text-xs" 
+                tick={{ fill: "hsl(var(--muted-foreground))" }} 
+                tickFormatter={yearlyViewMode === 'absolute' ? formatCurrency : formatPercentage} 
+              />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
@@ -232,13 +252,17 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
                   borderRadius: "0.5rem",
                 }}
                 formatter={(value: number, name: string) => {
-                  if (name === "percentage") return [formatPercentage(value), "Return %"];
-                  return [formatCurrency(value as number), "P/L"];
+                  if (name === 'realized' && yearlyViewMode === 'absolute') return [formatCurrency(value), "Realized"];
+                  if (name === 'percentage' && yearlyViewMode === 'percentage') return [formatPercentage(value), "Return %"];
+                  return [value, name];
                 }}
-                labelFormatter={(label) => `Date: ${label}`}
               />
-              <Line type="monotone" dataKey="percentage" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-            </LineChart>
+              <Bar 
+                dataKey={yearlyViewMode === 'absolute' ? 'realized' : 'percentage'} 
+                fill="hsl(var(--primary))" 
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
           </ResponsiveContainer>
         </TabsContent>
       </Tabs>

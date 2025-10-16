@@ -289,6 +289,92 @@ export interface MonthlyReturn {
   total: number;
 }
 
+export interface YearlyReturn {
+  year: string;
+  realized: number;
+  unrealized: number;
+  total: number;
+}
+
+export const calculateYearlyReturns = (
+  transactions: DeGiroTransaction[],
+  accountActivities: AccountActivity[] = []
+): YearlyReturn[] => {
+  const yearlyMap = new Map<string, { realized: number; deposits: number }>();
+  const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
+  
+  // Process transactions to calculate yearly realized P/L
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  
+  transactions.forEach((transaction) => {
+    const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, type: 'transaction', data: transaction });
+    }
+  });
+  
+  accountActivities.forEach((activity) => {
+    const date = parse(`${activity.datum} ${activity.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime()) && activity.omschrijving.toLowerCase().includes('ideal')) {
+      allEvents.push({ date, type: 'deposit', data: activity });
+    }
+  });
+  
+  allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
+  
+  allEvents.forEach((event) => {
+    const yearKey = format(event.date, 'yyyy');
+    
+    if (event.type === 'deposit') {
+      const existing = yearlyMap.get(yearKey) || { realized: 0, deposits: 0 };
+      yearlyMap.set(yearKey, {
+        ...existing,
+        deposits: existing.deposits + event.data.mutatie,
+      });
+    } else {
+      const transaction = event.data as DeGiroTransaction;
+      const key = `${transaction.isin}-${transaction.product}`;
+      const existing = holdingsMap.get(key);
+      
+      if (existing) {
+        const newQuantity = existing.quantity + transaction.aantal;
+        
+        if (newQuantity === 0) {
+          // Position closed - realize P/L
+          const realizedPL = existing.totalCost + transaction.waarde;
+          const yearData = yearlyMap.get(yearKey) || { realized: 0, deposits: 0 };
+          yearlyMap.set(yearKey, {
+            ...yearData,
+            realized: yearData.realized + realizedPL,
+          });
+          holdingsMap.delete(key);
+        } else {
+          holdingsMap.set(key, {
+            totalCost: existing.totalCost + transaction.waarde,
+            quantity: newQuantity,
+          });
+        }
+      } else {
+        holdingsMap.set(key, {
+          totalCost: transaction.waarde,
+          quantity: transaction.aantal,
+        });
+      }
+    }
+  });
+  
+  return Array.from(yearlyMap.entries())
+    .map(([year, data]) => ({
+      year,
+      realized: data.realized,
+      unrealized: 0,
+      total: data.realized,
+    }))
+    .sort((a, b) => {
+      return parseInt(a.year) - parseInt(b.year);
+    });
+};
+
 export const calculateMonthlyReturns = (
   transactions: DeGiroTransaction[],
   accountActivities: AccountActivity[] = []
