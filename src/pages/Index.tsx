@@ -189,7 +189,11 @@ const Index = () => {
               onTimeframeChange={setTimeframe}
             />
           </div>
-          <PortfolioChart data={portfolioSnapshots} timeframe={timeframe} />
+          <PortfolioChart 
+            data={portfolioSnapshots} 
+            timeframe={timeframe}
+            currentTotalPL={totalPL}
+          />
         </div>
 
         <Tabs defaultValue="stocks" className="mb-8">

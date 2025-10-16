@@ -6,9 +6,10 @@ import { format } from 'date-fns';
 interface PortfolioChartProps {
   data: PortfolioSnapshot[];
   timeframe: string;
+  currentTotalPL?: number;
 }
 
-export const PortfolioChart = ({ data, timeframe }: PortfolioChartProps) => {
+export const PortfolioChart = ({ data, timeframe, currentTotalPL }: PortfolioChartProps) => {
   const formatDate = (date: Date) => {
     // Validate date before formatting
     if (!date || isNaN(date.getTime())) {
@@ -21,10 +22,19 @@ export const PortfolioChart = ({ data, timeframe }: PortfolioChartProps) => {
 
   const chartData = data
     .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
-    .map((snapshot) => ({
-      date: formatDate(snapshot.date),
-      value: snapshot.value,
-    }));
+    .map((snapshot, index, array) => {
+      let value = snapshot.value;
+      
+      // For the last data point, adjust to show current Total P/L if provided
+      if (currentTotalPL !== undefined && index === array.length - 1) {
+        value = currentTotalPL;
+      }
+      
+      return {
+        date: formatDate(snapshot.date),
+        value,
+      };
+    });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
