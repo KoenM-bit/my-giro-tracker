@@ -221,12 +221,32 @@ export const calculateProfitLossByType = (
     }
   });
 
-  // For portfolio value and P/L:
-  // Portfolio Value = realized cash + current holdings value
-  // P/L = realized gains only for main calculation, unrealized shown separately
+  // Calculate portfolio value based on current holdings
+  // Portfolio Value = Stock Holdings Value - Options Holdings Value
+  let stocksValue = 0;
+  let optionsValue = 0;
+  
+  holdings.forEach((holding) => {
+    if (holding.currentPrice !== undefined && holding.quantity !== 0) {
+      const key = `${holding.isin}-${holding.product}`;
+      const holdingData = holdingsMap.get(key);
+      
+      if (holdingData && holdingData.quantity !== 0) {
+        if (holdingData.isOption) {
+          // Options: quantity * current price * 100 (contract multiplier)
+          optionsValue += holding.quantity * holding.currentPrice * 100;
+        } else {
+          // Stocks: quantity * current price
+          stocksValue += holding.quantity * holding.currentPrice;
+        }
+      }
+    }
+  });
+  
+  const portfolioValue = stocksValue - optionsValue;
+  
   const optionsPL = optionsRealized;
   const stocksPL = stocksRealized;
-  const portfolioValue = optionsRealized + stocksRealized + optionsUnrealized + stocksUnrealized;
   const totalCosts = calculateTotalCosts(transactions);
   
   return {
