@@ -23,6 +23,7 @@ interface PortfolioChartProps {
 }
 
 export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize, borrowedAmount, totalValue }: PortfolioChartProps) => {
+  const [realizedViewMode, setRealizedViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
@@ -62,6 +63,7 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
       return {
         date: formatDate(snapshot.date),
         value,
+        percentage: (value / netPortfolioValue) * 100,
       };
     });
 
@@ -99,21 +101,53 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
         </TabsList>
 
         <TabsContent value="realized">
-          <h3 className="text-lg font-semibold mb-4">Realized Profit Over Time</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Realized Profit Over Time</h3>
+            <div className="flex gap-2">
+              <Button
+                variant={realizedViewMode === 'absolute' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setRealizedViewMode('absolute')}
+              >
+                € Absolute
+              </Button>
+              <Button
+                variant={realizedViewMode === 'percentage' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setRealizedViewMode('percentage')}
+              >
+                % Percentage
+              </Button>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} tickFormatter={formatCurrency} />
+              <YAxis 
+                className="text-xs" 
+                tick={{ fill: "hsl(var(--muted-foreground))" }} 
+                tickFormatter={realizedViewMode === 'absolute' ? formatCurrency : formatPercentage} 
+              />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "0.5rem",
                 }}
-                formatter={(value: number) => [formatCurrency(value), "Value"]}
+                formatter={(value: number, name: string) => {
+                  if (name === 'value' && realizedViewMode === 'absolute') return [formatCurrency(value), "Value"];
+                  if (name === 'percentage' && realizedViewMode === 'percentage') return [formatPercentage(value), "Return %"];
+                  return [value, name];
+                }}
               />
-              <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+              <Line 
+                type="monotone" 
+                dataKey={realizedViewMode === 'absolute' ? 'value' : 'percentage'} 
+                stroke="hsl(var(--primary))" 
+                strokeWidth={2} 
+                dot={false} 
+              />
             </LineChart>
           </ResponsiveContainer>
         </TabsContent>
