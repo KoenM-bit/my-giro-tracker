@@ -31,7 +31,6 @@ function cleanHref(href: string): string {
 }
 
 function normalizeProductString(s: string): string {
-  // Replace NBSPs, collapse whitespace, trim
   return s
     .replace(/\u00A0/g, " ")
     .replace(/\s+/g, " ")
@@ -69,7 +68,6 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
     const options: ScrapedOption[] = [];
     for (const section of doc.querySelectorAll("section.contentblock")) {
       const expiry = (section as Element).querySelector("h3.titlecontent")?.textContent?.trim() ?? "Unknown Expiry";
-
       for (const row of (section as Element).querySelectorAll("tr")) {
         const strike = (row as Element).querySelector(".optiontable__focus")?.textContent?.trim().split(/\s+/)[0] ?? "";
         if (!strike) continue;
@@ -96,17 +94,14 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
     }
 
     console.log("Scraped", options.length, "options");
-
     const sample = options.slice(0, 5).map((o) => ({
       expiry: o.expiry,
       type: o.type,
       strike: o.strike,
       issueId: o.issueId,
     }));
-
     console.log("SCRAPER SAMPLE:", JSON.stringify(sample));
 
-    // Log November 2025 options for debugging
     const novOptions = options.filter((o) => o.expiry.includes("November 2025"));
     console.log(`Found ${novOptions.length} November 2025 options`);
     if (novOptions.length > 0) {
@@ -141,16 +136,12 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   return price;
 }
 
-// Parse both compact and long formats
 function matchOptionToHolding(holding: OptionHolding) {
   const raw = holding.product ?? "";
   const product = normalizeProductString(raw);
   const upper = product.toUpperCase();
 
-  // Compact: "AH C35.00 21NOV25" (or comma strike, optional space after C/P)
   const compact = /^(?:AH|AH9)\s+([CP])\s*([0-9]+(?:[.,][0-9]+)?)\s+([0-9]{1,2})([A-Z]{3})([0-9]{2})$/i;
-
-  // Long Dutch: "AHOLD DELHAIZE CALL 38.00 17-11-2025"
   const long = /AHOLD\s+DELHAIZE\s+(CALL|PUT)\s+([0-9]+(?:[.,][0-9]+)?)\s+([0-9]{2})-([0-9]{2})-([0-9]{4})/i;
 
   let type = "";
@@ -161,7 +152,7 @@ function matchOptionToHolding(holding: OptionHolding) {
   if (m) {
     const [, typeLetter, strikeRaw, day, monAbbr, yy] = m;
     type = typeLetter.toUpperCase() === "C" ? "Call" : "Put";
-    strike = strikeRaw.replace(",", ".").replace(".", ","); // normalize to comma decimals
+    strike = strikeRaw.replace(",", ".").replace(".", ",");
     const monthName = monthMap[monAbbr] ?? monAbbr;
     expiry = `${monthName} 20${yy}`;
     console.log(
@@ -172,8 +163,8 @@ function matchOptionToHolding(holding: OptionHolding) {
 
   m = product.match(long);
   if (m) {
-    const [, typeWord, strikeRaw, , mm, yyyy] = m; // day ignored
-    type = typeWord[0].toUpperCase() + typeWord.slice(1).toLowerCase(); // Call/Put
+    const [, typeWord, strikeRaw, , mm, yyyy] = m;
+    type = typeWord[0].toUpperCase() + typeWord.slice(1).toLowerCase();
     strike = strikeRaw.replace(",", ".").replace(".", ",");
     const monthIdx = parseInt(mm, 10) - 1;
     const months = [
@@ -225,6 +216,11 @@ serve(async (req) => {
       { product: string; status: "success"; price: number } | { product: string; status: "failed"; reason: string }
     > = [];
 
+    // ✅ helper once, outside loop
+    function normalizeStrike(strike: string): number {
+      return parseFloat(strike.replace(",", "."));
+    }
+
     for (const holding of holdings) {
       const parsed = matchOptionToHolding(holding);
       if (!parsed) {
@@ -232,30 +228,28 @@ serve(async (req) => {
         continue;
       }
 
-      // Find a matching option on the site (expiry text on page includes extra suffix like "(AEX / AH)")
-      // Helper: normalize "38,000" or "38.00" -> 38.0
-      function normalizeStrike(strike: string): number {
-        return parseFloat(strike.replace(",", "."));
-      }
-
-      // Filter all options with matching expiry (to reduce search space)
       const candidates = scrapedOptions.filter((o) => o.expiry.startsWith(parsed.expiry));
+
+      console.log(
+        `Looking for: ${parsed.type} ${parsed.strike} ${parsed.expiry} — ${candidates.length} candidates found`,
+      );
 
       const match = candidates.find((opt) => {
         const sameType = opt.type === parsed.type;
         const strikeDiff = Math.abs(normalizeStrike(opt.strike) - normalizeStrike(parsed.strike));
-        // Allow small float tolerance (0.01)
-        return sameType && strikeDiff < 0.01;
+        return sameType && strikeDiff < 0.001;
       });
 
       if (!match) {
         console.warn(
-          `No match found on beursduivel for ${holding.product} -> {${parsed.type} ${parsed.strike} ${parsed.expiry}}`,
+          `❌ No match found on beursduivel for ${holding.product} -> {${parsed.type} ${parsed.strike} ${parsed.expiry}}`,
         );
         console.warn(`Closest candidates for ${parsed.expiry}:`, JSON.stringify(candidates.slice(0, 10)));
         results.push({ product: holding.product, status: "failed", reason: "no match found" });
         continue;
       }
+
+      console.log(`✅ Matched ${parsed.type} ${parsed.strike} → issueId ${match.issueId} (${match.expiry})`);
 
       const price = await getLivePrice(match);
       if (price == null) {
@@ -264,18 +258,15 @@ serve(async (req) => {
       }
 
       results.push({ product: holding.product, status: "success", price });
-      // gentle throttle
       await new Promise((r) => setTimeout(r, 350));
     }
 
-    // Build the summary your frontend expects
     const summary = {
       successful: results.filter((r) => r.status === "success").length,
       failed: results.filter((r) => r.status === "failed").length,
       details: results,
     };
 
-    // 🔒 Supabase auth + DB updates (only when we actually have successes)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       console.warn("Missing Authorization header (prices will be returned but not stored)");
@@ -317,7 +308,6 @@ serve(async (req) => {
     }
 
     console.log(`Successfully fetched ${summary.successful}/${holdings.length} prices`);
-    // IMPORTANT: return "summary" to match your frontend
     return new Response(JSON.stringify({ success: true, summary, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
