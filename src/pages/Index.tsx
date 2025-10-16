@@ -455,7 +455,7 @@ const Index = () => {
         currentPrice: currentPrices.get(holding.isin),
       }));
       
-      const { portfolioValue: calcPortfolioValue } = calculateProfitLossByType(transactions, currentHoldings);
+      const { portfolioValue: calcPortfolioValue } = calculateProfitLossByType(transactions, currentHoldings, dividends);
       const netValue = calcPortfolioValue - borrowedAmount;
 
       const { error } = await supabase
@@ -538,7 +538,7 @@ const Index = () => {
     optionsUnrealized, 
     stocksRealized, 
     stocksUnrealized 
-  } = calculateProfitLossByType(transactions, allHoldings);
+  } = calculateProfitLossByType(transactions, allHoldings, dividends);
 
   // Separate holdings and transactions for stocks and options
   const optionPattern = /[CP]\d{2,}/;

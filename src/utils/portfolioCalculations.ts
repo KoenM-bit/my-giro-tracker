@@ -293,7 +293,8 @@ export const calculateProfitLoss = (transactions: DeGiroTransaction[]): number =
 
 export const calculateProfitLossByType = (
   transactions: DeGiroTransaction[],
-  holdings: PortfolioHolding[]
+  holdings: PortfolioHolding[],
+  dividends: Dividend[] = []
 ): {
   optionsPL: number;
   stocksPL: number;
@@ -304,6 +305,8 @@ export const calculateProfitLossByType = (
   stocksRealized: number;
   stocksUnrealized: number;
 } => {
+  // Calculate total dividends (add to stocks realized)
+  const totalDividends = dividends.reduce((sum, d) => sum + d.amount, 0);
   // Build holdings map to identify closed vs open positions
   const holdingsMap = new Map<string, { netCashFlow: number; quantity: number; isOption: boolean }>();
   
@@ -389,10 +392,13 @@ export const calculateProfitLossByType = (
     }
   });
   
+  // Add dividends to stocks realized profit
+  const stocksRealizedWithDividends = stocksRealized + totalDividends;
+  
   const optionsPL = optionsRealized + optionsUnrealized;
-  const stocksPL = stocksRealized + stocksUnrealized;
+  const stocksPL = stocksRealizedWithDividends + stocksUnrealized;
   const totalCosts = calculateTotalCosts(transactions);
-  const totalPL = optionsRealized + optionsUnrealized + stocksRealized + stocksUnrealized;
+  const totalPL = optionsRealized + optionsUnrealized + stocksRealizedWithDividends + stocksUnrealized;
   
   return {
     optionsPL,
@@ -401,7 +407,7 @@ export const calculateProfitLossByType = (
     totalPL: totalPL - totalCosts,
     optionsRealized,
     optionsUnrealized,
-    stocksRealized,
+    stocksRealized: stocksRealizedWithDividends,
     stocksUnrealized,
   };
 };
