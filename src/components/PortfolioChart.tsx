@@ -25,6 +25,7 @@ interface PortfolioChartProps {
 
 export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize, borrowedAmount, totalValue }: PortfolioChartProps) => {
   const [realizedViewMode, setRealizedViewMode] = useState<'absolute' | 'percentage'>('absolute');
+  const [realizedLineMode, setRealizedLineMode] = useState<'realized' | 'unrealized' | 'both'>('both');
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
@@ -53,14 +54,34 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
 
-  // Realized P/L chart data - uses realizedData instead of data
-  const chartData = realizedData
+  // Realized P/L chart data - uses realizedData
+  const realizedChartData = realizedData
     .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
     .map((snapshot) => ({
       date: formatDate(snapshot.date),
-      value: snapshot.value,
-      percentage: (snapshot.value / netPortfolioValue) * 100,
+      realized: snapshot.value,
+      realizedPercentage: (snapshot.value / netPortfolioValue) * 100,
     }));
+
+  // Unrealized data - combine realized and total to calculate unrealized
+  const unrealizedChartData = data
+    .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
+    .map((snapshot, index) => {
+      const realizedValue = index < realizedChartData.length ? realizedChartData[index].realized : 0;
+      const unrealizedValue = snapshot.value - realizedValue;
+      return {
+        date: formatDate(snapshot.date),
+        unrealized: unrealizedValue,
+        unrealizedPercentage: (unrealizedValue / netPortfolioValue) * 100,
+      };
+    });
+
+  // Combine both datasets for the chart
+  const combinedChartData = realizedChartData.map((item, index) => ({
+    ...item,
+    unrealized: index < unrealizedChartData.length ? unrealizedChartData[index].unrealized : 0,
+    unrealizedPercentage: index < unrealizedChartData.length ? unrealizedChartData[index].unrealizedPercentage : 0,
+  }));
 
   // YTD chart data
   const ytdData = calculateYTDPerformance(transactions, accountActivities)
@@ -97,26 +118,51 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
 
         <TabsContent value="realized">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Realized Profit Over Time</h3>
+            <h3 className="text-lg font-semibold">Realized vs Unrealized P/L</h3>
             <div className="flex gap-2">
-              <Button
-                variant={realizedViewMode === 'absolute' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setRealizedViewMode('absolute')}
-              >
-                € Absolute
-              </Button>
-              <Button
-                variant={realizedViewMode === 'percentage' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setRealizedViewMode('percentage')}
-              >
-                % Percentage
-              </Button>
+              <div className="flex gap-1 border rounded-md p-1">
+                <Button
+                  variant={realizedLineMode === 'realized' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setRealizedLineMode('realized')}
+                >
+                  Realized
+                </Button>
+                <Button
+                  variant={realizedLineMode === 'unrealized' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setRealizedLineMode('unrealized')}
+                >
+                  Unrealized
+                </Button>
+                <Button
+                  variant={realizedLineMode === 'both' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setRealizedLineMode('both')}
+                >
+                  Both
+                </Button>
+              </div>
+              <div className="flex gap-1 border rounded-md p-1">
+                <Button
+                  variant={realizedViewMode === 'absolute' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setRealizedViewMode('absolute')}
+                >
+                  €
+                </Button>
+                <Button
+                  variant={realizedViewMode === 'percentage' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setRealizedViewMode('percentage')}
+                >
+                  %
+                </Button>
+              </div>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
+            <LineChart data={combinedChartData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
               <YAxis 
@@ -131,18 +177,36 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
                   borderRadius: "0.5rem",
                 }}
                 formatter={(value: number, name: string) => {
-                  if (name === 'value' && realizedViewMode === 'absolute') return [formatCurrency(value), "Value"];
-                  if (name === 'percentage' && realizedViewMode === 'percentage') return [formatPercentage(value), "Return %"];
+                  if (realizedViewMode === 'absolute') {
+                    if (name === 'realized') return [formatCurrency(value), "Realized"];
+                    if (name === 'unrealized') return [formatCurrency(value), "Unrealized"];
+                  } else {
+                    if (name === 'realizedPercentage') return [formatPercentage(value), "Realized %"];
+                    if (name === 'unrealizedPercentage') return [formatPercentage(value), "Unrealized %"];
+                  }
                   return [value, name];
                 }}
               />
-              <Line 
-                type="monotone" 
-                dataKey={realizedViewMode === 'absolute' ? 'value' : 'percentage'} 
-                stroke="hsl(var(--primary))" 
-                strokeWidth={2} 
-                dot={false} 
-              />
+              {(realizedLineMode === 'realized' || realizedLineMode === 'both') && (
+                <Line 
+                  type="monotone" 
+                  dataKey={realizedViewMode === 'absolute' ? 'realized' : 'realizedPercentage'} 
+                  stroke="hsl(var(--primary))" 
+                  strokeWidth={2} 
+                  dot={false}
+                  name={realizedViewMode === 'absolute' ? 'realized' : 'realizedPercentage'}
+                />
+              )}
+              {(realizedLineMode === 'unrealized' || realizedLineMode === 'both') && (
+                <Line 
+                  type="monotone" 
+                  dataKey={realizedViewMode === 'absolute' ? 'unrealized' : 'unrealizedPercentage'} 
+                  stroke="hsl(var(--accent))" 
+                  strokeWidth={2} 
+                  dot={false}
+                  name={realizedViewMode === 'absolute' ? 'unrealized' : 'unrealizedPercentage'}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </TabsContent>
