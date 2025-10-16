@@ -39,6 +39,96 @@ export const calculatePortfolioValue = (transactions: DeGiroTransaction[]): numb
   return transactions.reduce((sum, t) => sum + t.waarde, 0);
 };
 
+export const calculateRealizedPLOverTime = (
+  transactions: DeGiroTransaction[],
+  accountActivities: AccountActivity[] = []
+): PortfolioSnapshot[] => {
+  // Track holdings to identify when positions are closed and realize P/L
+  const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
+  const snapshots: PortfolioSnapshot[] = [];
+  let realizedValue = 0; // Track deposits + realized P/L only
+  
+  // Combine transaction and deposit events
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  
+  transactions.forEach((transaction) => {
+    const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, type: 'transaction', data: transaction });
+    }
+  });
+  
+  accountActivities.forEach((activity) => {
+    const date = parse(`${activity.datum} ${activity.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime()) && activity.omschrijving.toLowerCase().includes('ideal')) {
+      allEvents.push({ date, type: 'deposit', data: activity });
+    }
+  });
+  
+  allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
+  
+  allEvents.forEach((event) => {
+    if (event.type === 'deposit') {
+      // Deposits add to realized value
+      realizedValue += event.data.mutatie;
+    } else {
+      // Transaction - only affects realized value when position closes
+      const transaction = event.data as DeGiroTransaction;
+      const key = `${transaction.isin}-${transaction.product}`;
+      const existing = holdingsMap.get(key);
+      
+      if (existing) {
+        const newQuantity = existing.quantity + transaction.aantal;
+        
+        if (newQuantity === 0) {
+          // Position fully closed - realize P/L
+          const realizedPL = existing.totalCost + transaction.waarde;
+          realizedValue += realizedPL;
+          holdingsMap.delete(key);
+        } else if (Math.sign(existing.quantity) !== Math.sign(newQuantity) && newQuantity !== 0) {
+          // Partial close - realize P/L on closed portion
+          const closedQuantity = Math.abs(existing.quantity) > Math.abs(transaction.aantal) 
+            ? Math.abs(transaction.aantal) 
+            : Math.abs(existing.quantity);
+          const avgCost = existing.totalCost / Math.abs(existing.quantity);
+          const closedCost = -avgCost * closedQuantity;
+          const closedSale = (transaction.waarde / Math.abs(transaction.aantal)) * closedQuantity;
+          const realizedPL = closedCost + closedSale;
+          realizedValue += realizedPL;
+          
+          // Update remaining position
+          const remainingQuantity = existing.quantity + transaction.aantal;
+          const remainingCost = existing.totalCost - closedCost;
+          holdingsMap.set(key, {
+            totalCost: remainingCost,
+            quantity: remainingQuantity,
+          });
+        } else {
+          // Adding to position - no realized P/L
+          holdingsMap.set(key, {
+            totalCost: existing.totalCost + transaction.waarde,
+            quantity: newQuantity,
+          });
+        }
+      } else {
+        // New position - no realized P/L
+        holdingsMap.set(key, {
+          totalCost: transaction.waarde,
+          quantity: transaction.aantal,
+        });
+      }
+    }
+    
+    // Only track realized value (no unrealized)
+    snapshots.push({
+      date: event.date,
+      value: realizedValue,
+    });
+  });
+  
+  return snapshots;
+};
+
 export const calculatePortfolioOverTime = (
   transactions: DeGiroTransaction[],
   accountActivities: AccountActivity[] = [],

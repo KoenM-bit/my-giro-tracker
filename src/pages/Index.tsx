@@ -15,6 +15,7 @@ import {
   calculateHoldings,
   calculatePortfolioValue,
   calculatePortfolioOverTime,
+  calculateRealizedPLOverTime,
   calculateTotalCosts,
   filterTransactionsByTimeframe,
   calculateProfitLossByType,
@@ -418,6 +419,7 @@ const Index = () => {
   const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));
   const totalCosts = calculateTotalCosts(transactions);
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities, priceHistory, currentPrices);
+  const realizedPLSnapshots = calculateRealizedPLOverTime(filteredTransactions, accountActivities);
   const { 
     optionsPL, 
     stocksPL,
@@ -560,7 +562,8 @@ const Index = () => {
             />
           </div>
           <PortfolioChart 
-            data={portfolioSnapshots} 
+            data={portfolioSnapshots}
+            realizedData={realizedPLSnapshots}
             timeframe={timeframe}
             currentTotalPL={totalPL}
             transactions={transactions}

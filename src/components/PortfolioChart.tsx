@@ -13,6 +13,7 @@ import {
 
 interface PortfolioChartProps {
   data: PortfolioSnapshot[];
+  realizedData: PortfolioSnapshot[];
   timeframe: string;
   currentTotalPL?: number;
   transactions: DeGiroTransaction[];
@@ -22,7 +23,7 @@ interface PortfolioChartProps {
   totalValue: number;
 }
 
-export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize, borrowedAmount, totalValue }: PortfolioChartProps) => {
+export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize, borrowedAmount, totalValue }: PortfolioChartProps) => {
   const [realizedViewMode, setRealizedViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
@@ -52,20 +53,14 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
 
-  // Realized P/L chart data
-  const chartData = data
+  // Realized P/L chart data - uses realizedData instead of data
+  const chartData = realizedData
     .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
-    .map((snapshot, index, array) => {
-      let value = snapshot.value;
-      if (currentTotalPL !== undefined && index === array.length - 1) {
-        value = currentTotalPL;
-      }
-      return {
-        date: formatDate(snapshot.date),
-        value,
-        percentage: (value / netPortfolioValue) * 100,
-      };
-    });
+    .map((snapshot) => ({
+      date: formatDate(snapshot.date),
+      value: snapshot.value,
+      percentage: (snapshot.value / netPortfolioValue) * 100,
+    }));
 
   // YTD chart data
   const ytdData = calculateYTDPerformance(transactions, accountActivities)
