@@ -92,13 +92,8 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
     }
   }
   console.log(`Scraped ${options.length} options`);
-  // --- DEBUG: show a few examples of the scraped data ---
-  console.log("Sample scraped options:");
-  for (let i = 0; i < Math.min(options.length, 10); i++) {
-    const o = options[i];
-    console.log(`#${i + 1} → type=${o.type}, strike=${o.strike}, expiry=${o.expiry}, issueId=${o.issueId}`);
-  }
-  console.log("End of sample ----------------------------");
+
+  console.log("First 3 options:", JSON.stringify(options.slice(0, 3), null, 2));
   return options;
 }
 
