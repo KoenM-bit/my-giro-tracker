@@ -73,12 +73,29 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
   const calculateScenarioValue = (hypotheticalPrice: number) => {
     if (!selectedExpiration) return null;
 
-    let optionsValue = 0;
-    let optionsCost = 0;
+    let optionsExpirationValue = 0;
+    let optionsCurrentValue = 0;
     let stockValue = 0;
     let stockCurrentValue = 0;
-    const optionDetails: Array<{ product: string; strike: number; type: string; quantity: number; value: number; cost: number; pl: number }> = [];
-    const stockDetails: Array<{ product: string; quantity: number; currentPrice: number; newPrice: number; currentValue: number; newValue: number; change: number }> = [];
+    const optionDetails: Array<{ 
+      product: string; 
+      strike: number; 
+      type: string; 
+      quantity: number; 
+      currentPrice: number;
+      currentValue: number;
+      expirationValue: number; 
+      change: number;
+    }> = [];
+    const stockDetails: Array<{ 
+      product: string; 
+      quantity: number; 
+      currentPrice: number; 
+      newPrice: number; 
+      currentValue: number; 
+      newValue: number; 
+      change: number;
+    }> = [];
 
     holdings.forEach(holding => {
       const isOption = holding.product.match(/(\d{2}[A-Z]{3}\d{2})/);
@@ -91,26 +108,35 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
           const optionType = optionMatch[1].toUpperCase();
           const strikePrice = parseFloat(optionMatch[2]);
           
-          let optionValue = 0;
+          // Calculate intrinsic value at expiration
+          let expirationValue = 0;
           if (optionType === 'CALL') {
-            // Call option: max(stock price - strike, 0)
-            optionValue = Math.max(hypotheticalPrice - strikePrice, 0) * holding.quantity * 100;
+            // Call option: max(stock price - strike, 0) per share
+            expirationValue = Math.max(hypotheticalPrice - strikePrice, 0) * holding.quantity * 100;
           } else if (optionType === 'PUT') {
-            // Put option: max(strike - stock price, 0)
-            optionValue = Math.max(strikePrice - hypotheticalPrice, 0) * holding.quantity * 100;
+            // Put option: max(strike - stock price, 0) per share
+            expirationValue = Math.max(strikePrice - hypotheticalPrice, 0) * holding.quantity * 100;
           }
 
-          const cost = holding.totalCost;
-          optionsValue += optionValue;
-          optionsCost += cost;
+          // Current market value of the option position
+          const currentPrice = holding.currentPrice || 0;
+          const currentValue = currentPrice * holding.quantity * 100;
+          
+          // Change in option value from now to expiration
+          const change = expirationValue - currentValue;
+          
+          optionsExpirationValue += expirationValue;
+          optionsCurrentValue += currentValue;
+          
           optionDetails.push({
             product: holding.product,
             strike: strikePrice,
             type: optionType,
             quantity: holding.quantity,
-            value: optionValue,
-            cost: cost,
-            pl: optionValue + cost,
+            currentPrice: currentPrice,
+            currentValue: currentValue,
+            expirationValue: expirationValue,
+            change: change,
           });
         }
       } else if (!isOption && holding.product.includes(underlyingStock || '')) {
@@ -131,14 +157,14 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
       }
     });
 
-    const optionsPL = optionsValue + optionsCost;
+    const optionsChange = optionsExpirationValue - optionsCurrentValue;
     const stockChange = stockValue - stockCurrentValue;
-    const totalChange = optionsPL + stockChange;
+    const totalChange = optionsChange + stockChange;
 
     return {
-      optionsValue,
-      optionsCost,
-      optionsPL,
+      optionsCurrentValue,
+      optionsExpirationValue,
+      optionsChange,
       stockCurrentValue,
       stockValue,
       stockChange,
@@ -247,15 +273,21 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
                     {/* Summary */}
                     <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
                       <div>
-                        <p className="text-sm text-muted-foreground">Options P/L</p>
-                        <p className={`text-xl font-bold ${result.optionsPL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatCurrency(result.optionsPL)}
+                        <p className="text-sm text-muted-foreground">Options Change</p>
+                        <p className={`text-xl font-bold ${result.optionsChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(result.optionsChange)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatCurrency(result.optionsCurrentValue)} → {formatCurrency(result.optionsExpirationValue)}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Stock Change</p>
                         <p className={`text-xl font-bold ${result.stockChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {formatCurrency(result.stockChange)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatCurrency(result.stockCurrentValue)} → {formatCurrency(result.stockValue)}
                         </p>
                       </div>
                       <div>
@@ -277,9 +309,10 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
                                 <TableHead>Product</TableHead>
                                 <TableHead className="text-right">Strike</TableHead>
                                 <TableHead className="text-right">Contracts</TableHead>
-                                <TableHead className="text-right">Value at Exp.</TableHead>
-                                <TableHead className="text-right">Cost Basis</TableHead>
-                                <TableHead className="text-right">P/L</TableHead>
+                                <TableHead className="text-right">Current Price</TableHead>
+                                <TableHead className="text-right">Current Value</TableHead>
+                                <TableHead className="text-right">Exp. Value</TableHead>
+                                <TableHead className="text-right">Change</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -288,11 +321,12 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
                                   <TableCell className="font-medium">{opt.product}</TableCell>
                                   <TableCell className="text-right">{formatCurrency(opt.strike)}</TableCell>
                                   <TableCell className="text-right">{opt.quantity}</TableCell>
-                                  <TableCell className="text-right">{formatCurrency(opt.value)}</TableCell>
-                                  <TableCell className="text-right">{formatCurrency(opt.cost)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(opt.currentPrice)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(opt.currentValue)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(opt.expirationValue)}</TableCell>
                                   <TableCell className="text-right">
-                                    <Badge variant={opt.pl >= 0 ? 'default' : 'destructive'}>
-                                      {formatCurrency(opt.pl)}
+                                    <Badge variant={opt.change >= 0 ? 'default' : 'destructive'}>
+                                      {formatCurrency(opt.change)}
                                     </Badge>
                                   </TableCell>
                                 </TableRow>
