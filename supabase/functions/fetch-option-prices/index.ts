@@ -15,7 +15,6 @@ interface OptionHolding {
   isin: string;
   product: string;
 }
-
 interface ScrapedOption {
   type: string;
   expiry: string;
@@ -24,18 +23,36 @@ interface ScrapedOption {
   url: string;
 }
 
-/**
- * Normalize relative URLs like ../../../Optie-Koers/... into absolute
- */
+// ---------- helpers ----------
 function cleanHref(href: string): string {
   const normalized = href.replace(/\.\.\/\.\.\//g, "/");
   const url = new URL(normalized, BASE_URL);
   return url.toString();
 }
 
-/**
- * Scrape all available Ahold Delhaize options from beursduivel
- */
+function normalizeProductString(s: string): string {
+  // Replace NBSPs, collapse whitespace, trim
+  return s
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const monthMap: Record<string, string> = {
+  JAN: "Januari",
+  FEB: "Februari",
+  MAR: "Maart",
+  APR: "April",
+  MAY: "Mei",
+  JUN: "Juni",
+  JUL: "Juli",
+  AUG: "Augustus",
+  SEP: "September",
+  OCT: "Oktober",
+  NOV: "November",
+  DEC: "December",
+};
+
 async function fetchOptionChain(): Promise<ScrapedOption[]> {
   const url = `${BASE_URL}/Aandeel-Koers/11755/Ahold-Delhaize-Koninklijke/opties-expiratiedatum.aspx`;
   console.log(`Fetching option chain from ${url} ...`);
@@ -78,16 +95,12 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
   return options;
 }
 
-/**
- * Fetch live price from the option detail page
- */
 async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   const response = await fetch(option.url, { headers: HEADERS });
   if (!response.ok) {
     console.warn(`Failed to fetch price for ${option.issueId}: ${response.status}`);
     return null;
   }
-
   const html = await response.text();
   const doc = new DOMParser().parseFromString(html, "text/html");
   if (!doc) return null;
@@ -103,47 +116,65 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   return price;
 }
 
-/**
- * Parse a holding like:
- *  AH C35.00 21NOV25
- *  AH P38.00 21NOV25
- *  AHOLD DELHAIZE CALL 38.00 17-11-2025
- */
+// Parse both compact and long formats
 function matchOptionToHolding(holding: OptionHolding) {
-  const product = holding.product.trim();
+  const raw = holding.product ?? "";
+  const product = normalizeProductString(raw);
+  const upper = product.toUpperCase();
 
-  // Expect format: AH C35.00 21NOV25 or AH P38.00 21NOV25
-  const pattern = /^AH\s+([CP])\s*([\d.]+)\s+(\d{1,2})([A-Z]{3})(\d{2})$/i;
-  const match = product.match(pattern);
-  if (!match) {
-    console.warn(`Could not parse option from product: ${product}`);
-    console.warn(`RAW PRODUCT STRING: [${product}]`);
-    return null;
+  // Compact: "AH C35.00 21NOV25" (or comma strike, optional space after C/P)
+  const compact = /^(?:AH|AH9)\s+([CP])\s*([0-9]+(?:[.,][0-9]+)?)\s+([0-9]{1,2})([A-Z]{3})([0-9]{2})$/i;
+
+  // Long Dutch: "AHOLD DELHAIZE CALL 38.00 17-11-2025"
+  const long = /AHOLD\s+DELHAIZE\s+(CALL|PUT)\s+([0-9]+(?:[.,][0-9]+)?)\s+([0-9]{2})-([0-9]{2})-([0-9]{4})/i;
+
+  let type = "";
+  let strike = "";
+  let expiry = "";
+
+  let m = upper.match(compact);
+  if (m) {
+    const [, typeLetter, strikeRaw, day, monAbbr, yy] = m;
+    type = typeLetter.toUpperCase() === "C" ? "Call" : "Put";
+    strike = strikeRaw.replace(".", ","); // scraped site uses comma decimals
+    const monthName = monthMap[monAbbr] ?? monAbbr;
+    expiry = `${monthName} 20${yy}`;
+    console.log(
+      `Parsed (compact): raw=[${raw}] normalized=[${product}] -> { type:${type}, strike:${strike}, expiry:${expiry} }`,
+    );
+    return { type, strike, expiry };
   }
 
-  const [, typeLetter, strikeRaw, , monthAbbr, yearShort] = match;
-  const type = typeLetter.toUpperCase() === "C" ? "Call" : "Put";
-  const strike = strikeRaw.replace(".", ",");
+  m = product.match(long);
+  if (m) {
+    const [, typeWord, strikeRaw, , mm, yyyy] = m; // day ignored
+    type = typeWord[0].toUpperCase() + typeWord.slice(1).toLowerCase(); // Call/Put
+    strike = strikeRaw.replace(".", ",");
+    const monthIdx = parseInt(mm, 10) - 1;
+    const months = [
+      "Januari",
+      "Februari",
+      "Maart",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Augustus",
+      "September",
+      "Oktober",
+      "November",
+      "December",
+    ];
+    expiry = `${months[monthIdx]} ${yyyy}`;
+    console.log(
+      `Parsed (long): raw=[${raw}] normalized=[${product}] -> { type:${type}, strike:${strike}, expiry:${expiry} }`,
+    );
+    return { type, strike, expiry };
+  }
 
-  const monthMap: Record<string, string> = {
-    JAN: "Januari",
-    FEB: "Februari",
-    MAR: "Maart",
-    APR: "April",
-    MAY: "Mei",
-    JUN: "Juni",
-    JUL: "Juli",
-    AUG: "Augustus",
-    SEP: "September",
-    OCT: "Oktober",
-    NOV: "November",
-    DEC: "December",
-  };
-  const month = monthMap[monthAbbr.toUpperCase()] || monthAbbr;
-  const year = `20${yearShort}`;
-
-  const expiry = `${month} ${year}`;
-  return { strike, expiry, type };
+  console.warn(`Could not parse option from product: ${raw}`);
+  console.warn(`RAW=[${raw}] | NORMALIZED=[${product}]`);
+  return null;
 }
 
 serve(async (req) => {
@@ -152,17 +183,22 @@ serve(async (req) => {
   }
 
   try {
-    const { holdings } = await req.json();
-    if (!Array.isArray(holdings) || holdings.length === 0) {
+    const body = await req.json();
+    const holdings: OptionHolding[] = Array.isArray(body?.holdings) ? body.holdings : [];
+    console.log(`Edge fn fetch-option-prices: received ${holdings.length} holdings`);
+
+    if (!holdings.length) {
       return new Response(JSON.stringify({ success: false, error: "No holdings provided" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
-    console.log(`Fetching prices for ${holdings.length} holdings...`);
     const scrapedOptions = await fetchOptionChain();
-    const results: any[] = [];
+
+    const results: Array<
+      { product: string; status: "success"; price: number } | { product: string; status: "failed"; reason: string }
+    > = [];
 
     for (const holding of holdings) {
       const parsed = matchOptionToHolding(holding);
@@ -171,12 +207,15 @@ serve(async (req) => {
         continue;
       }
 
+      // Find a matching option on the site (expiry text on page includes extra suffix like "(AEX / AH)")
       const match = scrapedOptions.find(
-        (opt) => opt.strike === parsed.strike && opt.expiry.includes(parsed.expiry) && opt.type === parsed.type,
+        (opt) => opt.type === parsed.type && opt.strike === parsed.strike && opt.expiry.startsWith(parsed.expiry),
       );
 
       if (!match) {
-        console.warn(`No match found for ${holding.product}`);
+        console.warn(
+          `No match found on beursduivel for ${holding.product} -> {${parsed.type} ${parsed.strike} ${parsed.expiry}}`,
+        );
         results.push({ product: holding.product, status: "failed", reason: "no match found" });
         continue;
       }
@@ -188,48 +227,61 @@ serve(async (req) => {
       }
 
       results.push({ product: holding.product, status: "success", price });
-      await new Promise((r) => setTimeout(r, 400)); // gentle throttle
+      // gentle throttle
+      await new Promise((r) => setTimeout(r, 350));
     }
 
-    // 🔒 Supabase authentication & DB update
+    // Build the summary your frontend expects
+    const summary = {
+      successful: results.filter((r) => r.status === "success").length,
+      failed: results.filter((r) => r.status === "failed").length,
+      details: results,
+    };
+
+    // 🔒 Supabase auth + DB updates (only when we actually have successes)
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Missing Authorization header");
+    if (!authHeader) {
+      console.warn("Missing Authorization header (prices will be returned but not stored)");
+    } else if (summary.successful > 0) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+      const token = authHeader.replace("Bearer ", "");
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser(token);
 
-    const token = authHeader.replace("Bearer ", "");
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser(token);
-    if (userError || !user) throw new Error("Invalid authorization token");
+      if (userError || !user) {
+        console.warn("Invalid authorization token; skipping DB upserts");
+      } else {
+        for (const r of results.filter((x) => x.status === "success") as Array<{ product: string; price: number }>) {
+          const holding = holdings.find((h) => h.product === r.product);
+          if (!holding) continue;
 
-    const updates = results.filter((r) => r.status === "success");
-    for (const u of updates) {
-      const holding = holdings.find((h) => h.product === u.product);
-      if (!holding) continue;
+          const { error: upsertError } = await supabase.from("current_prices").upsert(
+            {
+              user_id: user.id,
+              isin: holding.isin,
+              current_price: r.price,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,isin" },
+          );
 
-      const { error: upsertError } = await supabase.from("current_prices").upsert(
-        {
-          user_id: user.id,
-          isin: holding.isin,
-          current_price: u.price,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,isin" },
-      );
-
-      if (upsertError) {
-        console.error(`Database update failed for ${holding.product}:`, upsertError);
+          if (upsertError) {
+            console.error(`Database update failed for ${holding.product}:`, upsertError);
+          }
+        }
       }
     }
 
-    console.log(`Successfully fetched ${updates.length}/${holdings.length} prices`);
-    return new Response(JSON.stringify({ success: true, results }), {
+    console.log(`Successfully fetched ${summary.successful}/${holdings.length} prices`);
+    // IMPORTANT: return "summary" to match your frontend
+    return new Response(JSON.stringify({ success: true, summary, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
@@ -239,10 +291,7 @@ serve(async (req) => {
         success: false,
         error: err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error",
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
 });
