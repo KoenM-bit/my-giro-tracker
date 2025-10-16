@@ -35,3 +35,18 @@ export interface PortfolioSnapshot {
   date: Date;
   value: number;
 }
+
+export interface AccountActivity {
+  datum: string;
+  tijd: string;
+  valutadatum: string;
+  product: string;
+  isin: string;
+  omschrijving: string;
+  fx: string;
+  mutatie: number;
+  mutatieCurrency: string;
+  saldo: number;
+  saldoCurrency: string;
+  orderId: string;
+}

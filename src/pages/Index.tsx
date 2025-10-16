@@ -5,8 +5,9 @@ import { PortfolioChart } from '@/components/PortfolioChart';
 import { HoldingsTable } from '@/components/HoldingsTable';
 import { TransactionTable } from '@/components/TransactionTable';
 import { TimeframeSelector } from '@/components/TimeframeSelector';
-import { DeGiroTransaction } from '@/types/transaction';
-import { parseDeGiroCSV } from '@/utils/csvParser';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DeGiroTransaction, AccountActivity } from '@/types/transaction';
+import { parseDeGiroCSV, parseAccountActivityCSV } from '@/utils/csvParser';
 import {
   calculateHoldings,
   calculatePortfolioValue,
@@ -19,6 +20,7 @@ import { TrendingUp } from 'lucide-react';
 
 const Index = () => {
   const [transactions, setTransactions] = useState<DeGiroTransaction[]>([]);
+  const [accountActivities, setAccountActivities] = useState<AccountActivity[]>([]);
   const [timeframe, setTimeframe] = useState('ALL');
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
 
@@ -30,6 +32,17 @@ const Index = () => {
     } catch (error) {
       console.error('Error parsing CSV:', error);
       toast.error('Failed to parse CSV file. Please check the format.');
+    }
+  };
+
+  const handleAccountActivitySelect = async (file: File) => {
+    try {
+      const parsedActivities = await parseAccountActivityCSV(file);
+      setAccountActivities(parsedActivities);
+      toast.success(`Successfully loaded ${parsedActivities.length} account activities`);
+    } catch (error) {
+      console.error('Error parsing CSV:', error);
+      toast.error('Failed to parse account activity CSV file. Please check the format.');
     }
   };
 
@@ -50,7 +63,7 @@ const Index = () => {
   const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));
   const totalValue = calculatePortfolioValue(transactions);
   const totalCosts = calculateTotalCosts(transactions);
-  const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions);
+  const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities);
   const profitLoss = totalValue;
 
   if (transactions.length === 0) {
@@ -68,7 +81,24 @@ const Index = () => {
               Upload your DeGiro transaction history to analyze your portfolio performance
             </p>
           </div>
-          <FileUpload onFileSelect={handleFileSelect} />
+          
+          <Tabs defaultValue="transactions" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="transactions">Transacties</TabsTrigger>
+              <TabsTrigger value="account">In/Uitboekingen</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="transactions">
+              <FileUpload onFileSelect={handleFileSelect} />
+            </TabsContent>
+            
+            <TabsContent value="account">
+              <FileUpload onFileSelect={handleAccountActivitySelect} />
+              <p className="text-sm text-muted-foreground mt-4 text-center">
+                Upload je account mutaties CSV om deposits en withdrawals te importeren
+              </p>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     );
@@ -88,9 +118,24 @@ const Index = () => {
               </div>
               <p className="text-muted-foreground">
                 Tracking {transactions.length} transactions
+                {accountActivities.length > 0 && ` • ${accountActivities.length} account activities`}
               </p>
             </div>
-            <FileUpload onFileSelect={handleFileSelect} />
+            
+            <Tabs defaultValue="transactions" className="w-[400px]">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="transactions">Transacties</TabsTrigger>
+                <TabsTrigger value="account">In/Uitboekingen</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="transactions" className="mt-4">
+                <FileUpload onFileSelect={handleFileSelect} />
+              </TabsContent>
+              
+              <TabsContent value="account" className="mt-4">
+                <FileUpload onFileSelect={handleAccountActivitySelect} />
+              </TabsContent>
+            </Tabs>
           </div>
 
           <PortfolioOverview

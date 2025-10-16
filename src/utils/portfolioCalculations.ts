@@ -1,4 +1,4 @@
-import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot } from '@/types/transaction';
+import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot, AccountActivity } from '@/types/transaction';
 import { parse } from 'date-fns';
 
 export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioHolding[] => {
@@ -39,27 +39,41 @@ export const calculatePortfolioValue = (transactions: DeGiroTransaction[]): numb
   return transactions.reduce((sum, t) => sum + t.waarde, 0);
 };
 
-export const calculatePortfolioOverTime = (transactions: DeGiroTransaction[]): PortfolioSnapshot[] => {
-  const sortedTransactions = [...transactions].sort((a, b) => {
-    const dateA = parse(`${a.datum} ${a.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
-    const dateB = parse(`${b.datum} ${b.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
-    return dateA.getTime() - dateB.getTime();
+export const calculatePortfolioOverTime = (
+  transactions: DeGiroTransaction[],
+  accountActivities: AccountActivity[] = []
+): PortfolioSnapshot[] => {
+  // Combine transactions and account activities
+  const allEvents: Array<{ date: Date; value: number }> = [];
+
+  // Add transactions
+  transactions.forEach((transaction) => {
+    const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, value: transaction.waarde });
+    }
   });
+
+  // Add deposits/withdrawals (identified by "ideal" in description)
+  accountActivities.forEach((activity) => {
+    const date = parse(`${activity.datum} ${activity.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
+    if (!isNaN(date.getTime()) && activity.omschrijving.toLowerCase().includes('ideal')) {
+      allEvents.push({ date, value: activity.mutatie });
+    }
+  });
+
+  // Sort all events by date
+  allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const snapshots: PortfolioSnapshot[] = [];
   let runningTotal = 0;
 
-  sortedTransactions.forEach((transaction) => {
-    runningTotal += transaction.waarde;
-    const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
-    
-    // Only add valid dates
-    if (!isNaN(date.getTime())) {
-      snapshots.push({
-        date,
-        value: runningTotal,
-      });
-    }
+  allEvents.forEach((event) => {
+    runningTotal += event.value;
+    snapshots.push({
+      date: event.date,
+      value: runningTotal,
+    });
   });
 
   return snapshots;
