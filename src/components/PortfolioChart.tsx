@@ -59,29 +59,30 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
     .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
     .map((snapshot) => ({
       date: formatDate(snapshot.date),
+      dateKey: snapshot.date.getTime(),
       realized: snapshot.value,
       realizedPercentage: (snapshot.value / netPortfolioValue) * 100,
     }));
 
-  // Unrealized data - combine realized and total to calculate unrealized
-  const unrealizedChartData = data
-    .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
-    .map((snapshot, index) => {
-      const realizedValue = index < realizedChartData.length ? realizedChartData[index].realized : 0;
-      const unrealizedValue = snapshot.value - realizedValue;
-      return {
-        date: formatDate(snapshot.date),
-        unrealized: unrealizedValue,
-        unrealizedPercentage: (unrealizedValue / netPortfolioValue) * 100,
-      };
-    });
+  // Create a map of total values by date
+  const totalValueByDate = new Map(
+    data
+      .filter((snapshot) => snapshot.date && !isNaN(snapshot.date.getTime()))
+      .map((snapshot) => [snapshot.date.getTime(), snapshot.value])
+  );
 
-  // Combine both datasets for the chart
-  const combinedChartData = realizedChartData.map((item, index) => ({
-    ...item,
-    unrealized: index < unrealizedChartData.length ? unrealizedChartData[index].unrealized : 0,
-    unrealizedPercentage: index < unrealizedChartData.length ? unrealizedChartData[index].unrealizedPercentage : 0,
-  }));
+  // Combine both datasets - unrealized = total - realized
+  const combinedChartData = realizedChartData.map((item) => {
+    const totalValue = totalValueByDate.get(item.dateKey) || 0;
+    const unrealizedValue = totalValue - item.realized;
+    return {
+      date: item.date,
+      realized: item.realized,
+      realizedPercentage: item.realizedPercentage,
+      unrealized: unrealizedValue,
+      unrealizedPercentage: (unrealizedValue / netPortfolioValue) * 100,
+    };
+  });
 
   // YTD chart data
   const ytdData = calculateYTDPerformance(transactions, accountActivities)
