@@ -209,7 +209,7 @@ const Index = () => {
             order_id: t.orderId,
           })),
           {
-            onConflict: 'user_id,order_id,product,isin,aantal,totaal',
+            onConflict: 'user_id,datum,tijd,product,isin,aantal,koers,waarde,totaal,transactiekosten',
             ignoreDuplicates: true
           }
         );
