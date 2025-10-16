@@ -54,58 +54,61 @@ const monthMap: Record<string, string> = {
 };
 
 async function fetchOptionChain(): Promise<ScrapedOption[]> {
-  const url = `${BASE_URL}/Aandeel-Koers/11755/Ahold-Delhaize-Koninklijke/opties-expiratiedatum.aspx`;
-  console.log(`Fetching option chain from ${url} ...`);
-  const response = await fetch(url, { headers: HEADERS });
-  if (!response.ok) throw new Error(`Failed to fetch option chain (${response.status})`);
-  const html = await response.text();
+  try {
+    const url = `${BASE_URL}/Aandeel-Koers/11755/Ahold-Delhaize-Koninklijke/opties-expiratiedatum.aspx`;
+    console.log(`Fetching option chain from ${url} ...`);
+    const response = await fetch(url, { headers: HEADERS });
+    if (!response.ok) throw new Error(`Failed to fetch option chain (${response.status})`);
+    const html = await response.text();
 
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  if (!doc) throw new Error("Failed to parse beursduivel HTML");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    if (!doc) throw new Error("Failed to parse beursduivel HTML");
 
-  const options: ScrapedOption[] = [];
-  for (const section of doc.querySelectorAll("section.contentblock")) {
-    const expiry = (section as Element).querySelector("h3.titlecontent")?.textContent?.trim() ?? "Unknown Expiry";
+    const options: ScrapedOption[] = [];
+    for (const section of doc.querySelectorAll("section.contentblock")) {
+      const expiry = (section as Element).querySelector("h3.titlecontent")?.textContent?.trim() ?? "Unknown Expiry";
 
-    for (const row of (section as Element).querySelectorAll("tr")) {
-      const strike = (row as Element).querySelector(".optiontable__focus")?.textContent?.trim().split(/\s+/)[0] ?? "";
-      if (!strike) continue;
+      for (const row of (section as Element).querySelectorAll("tr")) {
+        const strike = (row as Element).querySelector(".optiontable__focus")?.textContent?.trim().split(/\s+/)[0] ?? "";
+        if (!strike) continue;
 
-      for (const optType of ["Call", "Put"]) {
-        const link = (row as Element).querySelector(`a.optionlink.${optType}`);
-        if (!link) continue;
-        const href = link.getAttribute("href");
-        if (!href) continue;
+        for (const optType of ["Call", "Put"]) {
+          const link = (row as Element).querySelector(`a.optionlink.${optType}`);
+          if (!link) continue;
+          const href = link.getAttribute("href");
+          if (!href) continue;
 
-        const idMatch = href.match(/\/(\d+)\//);
-        const issueId = idMatch ? idMatch[1] : null;
-        if (!issueId) continue;
+          const idMatch = href.match(/\/(\d+)\//);
+          const issueId = idMatch ? idMatch[1] : null;
+          if (!issueId) continue;
 
-        options.push({
-          type: optType,
-          expiry,
-          strike,
-          issueId,
-          url: cleanHref(href),
-        });
+          options.push({
+            type: optType,
+            expiry,
+            strike,
+            issueId,
+            url: cleanHref(href),
+          });
+        }
       }
     }
+
+    console.log("Scraped", options.length, "options");
+
+    const sample = options.slice(0, 5).map((o) => ({
+      expiry: o.expiry,
+      type: o.type,
+      strike: o.strike,
+      issueId: o.issueId,
+    }));
+
+    console.log("SCRAPER SAMPLE:", JSON.stringify(sample));
+
+    return options;
+  } catch (err) {
+    console.error("fetchOptionChain error:", err);
+    return [];
   }
-  console.log("Scraped", options.length, "options");
-
-  const sample = options.slice(0, 5).map(o => ({
-    expiry: o.expiry,
-    type: o.type,
-    strike: o.strike,
-    issueId: o.issueId,
-  }));
-
-  console.log("SCRAPER SAMPLE:", JSON.stringify(sample));
-
-  return options;
-} catch (err) {
-  console.error("fetchOptionChain error:", err);
-  return [];
 }
 
 async function getLivePrice(option: ScrapedOption): Promise<number | null> {
