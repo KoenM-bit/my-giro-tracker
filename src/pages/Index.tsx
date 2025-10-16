@@ -62,12 +62,12 @@ const Index = () => {
   const filteredTransactions = filterTransactionsByTimeframe(transactions, timeframe);
   const allHoldings = calculateHoldings(transactions);
   const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));
-  const totalValue = calculatePortfolioValue(transactions);
   const totalCosts = calculateTotalCosts(transactions);
   const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities);
   const { 
     optionsPL, 
-    stocksPL, 
+    stocksPL,
+    portfolioValue,
     totalPL, 
     optionsRealized, 
     optionsUnrealized, 
@@ -156,7 +156,7 @@ const Index = () => {
           </div>
 
           <PortfolioOverview
-            totalValue={totalValue}
+            totalValue={portfolioValue}
             totalCosts={totalCosts}
             optionsPL={optionsPL}
             stocksPL={stocksPL}

@@ -98,6 +98,7 @@ export const calculateProfitLoss = (transactions: DeGiroTransaction[]): number =
 export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
   optionsPL: number;
   stocksPL: number;
+  portfolioValue: number;
   totalPL: number;
   optionsRealized: number;
   optionsUnrealized: number;
@@ -152,18 +153,19 @@ export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
     }
   });
   
-  // For total P/L calculation:
-  // - Realized = actual profit/loss from closed positions (can be positive or negative)
-  // - Unrealized for stocks = current value of holdings (positive)
-  // Total P/L = realized gains - unrealized value invested - costs
-  const optionsPL = optionsRealized - optionsUnrealized;
-  const stocksPL = stocksRealized - stocksUnrealized;
+  // For portfolio value and P/L:
+  // Portfolio Value = realized cash + current holdings value
+  // P/L = realized gains + unrealized holdings value
+  const optionsPL = optionsRealized + optionsUnrealized;
+  const stocksPL = stocksRealized + stocksUnrealized;
+  const portfolioValue = optionsPL + stocksPL;
   const totalCosts = calculateTotalCosts(transactions);
   
   return {
     optionsPL,
     stocksPL,
-    totalPL: optionsPL + stocksPL - totalCosts,
+    portfolioValue,
+    totalPL: portfolioValue - totalCosts,
     optionsRealized,
     optionsUnrealized,
     stocksRealized,
