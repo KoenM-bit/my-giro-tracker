@@ -4,12 +4,13 @@ import { PortfolioSnapshot, DeGiroTransaction, AccountActivity } from "@/types/t
 import { format } from "date-fns";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Button } from "./ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   calculateMonthlyReturns, 
   calculateYTDPerformance,
   calculateYearlyReturns
 } from "@/utils/portfolioCalculations";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PortfolioChartProps {
   data: PortfolioSnapshot[];
@@ -29,8 +30,34 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
   const [monthlyViewMode, setMonthlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [yearlyViewMode, setYearlyViewMode] = useState<'absolute' | 'percentage'>('absolute');
   const [ytdViewMode, setYtdViewMode] = useState<'absolute' | 'percentage'>('absolute');
+  const [netValueSnapshots, setNetValueSnapshots] = useState<any[]>([]);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(true);
 
   const netPortfolioValue = totalValue - borrowedAmount;
+
+  useEffect(() => {
+    fetchSnapshots();
+  }, []);
+
+  const fetchSnapshots = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('portfolio_snapshots')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: true });
+
+      if (error) throw error;
+      setNetValueSnapshots(data || []);
+    } catch (error) {
+      console.error('Error fetching snapshots:', error);
+    } finally {
+      setLoadingSnapshots(false);
+    }
+  };
 
   const formatDate = (date: Date) => {
     if (!date || isNaN(date.getTime())) {
@@ -105,6 +132,14 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
     percentage: (item.realized / netPortfolioValue) * 100,
   }));
 
+  // Net value chart data from database snapshots
+  const netValueChartData = netValueSnapshots.map(snapshot => ({
+    date: format(new Date(snapshot.timestamp), 'dd MMM HH:mm'),
+    netValue: Number(snapshot.net_value),
+    portfolioValue: Number(snapshot.portfolio_value),
+    borrowedAmount: Number(snapshot.borrowed_amount),
+  }));
+
   // Cumulative returns data - removed as it's redundant with YTD percentage
 
   return (
@@ -115,6 +150,7 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
           <TabsTrigger value="ytd">YTD</TabsTrigger>
           <TabsTrigger value="monthly">Monthly Returns</TabsTrigger>
           <TabsTrigger value="yearly">Yearly Returns</TabsTrigger>
+          <TabsTrigger value="netvalue">Net Value</TabsTrigger>
         </TabsList>
 
         <TabsContent value="realized">
@@ -362,6 +398,69 @@ export const PortfolioChart = ({ data, realizedData, timeframe, currentTotalPL, 
               />
             </BarChart>
           </ResponsiveContainer>
+        </TabsContent>
+
+        <TabsContent value="netvalue">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Net Portfolio Value Over Time</h3>
+          </div>
+          {loadingSnapshots ? (
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              Loading snapshot data...
+            </div>
+          ) : netValueSnapshots.length === 0 ? (
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              No historical data available yet. Upload transactions or update prices to start tracking.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={netValueChartData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis 
+                  dataKey="date" 
+                  className="text-xs" 
+                  tick={{ fill: "hsl(var(--muted-foreground))" }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis 
+                  className="text-xs" 
+                  tick={{ fill: "hsl(var(--muted-foreground))" }} 
+                  tickFormatter={formatCurrency}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "0.5rem",
+                  }}
+                  formatter={(value: number, name: string) => {
+                    if (name === 'netValue') return [formatCurrency(value), "Net Value"];
+                    if (name === 'portfolioValue') return [formatCurrency(value), "Portfolio Value"];
+                    return [formatCurrency(value), name];
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="netValue"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  name="netValue"
+                  dot={{ r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="portfolioValue"
+                  stroke="hsl(var(--chart-2))"
+                  strokeWidth={1.5}
+                  name="portfolioValue"
+                  dot={false}
+                  strokeDasharray="5 5"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </TabsContent>
       </Tabs>
     </Card>

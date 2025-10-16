@@ -8,7 +8,6 @@ import { HoldingsTable } from '@/components/HoldingsTable';
 import { TransactionTable } from '@/components/TransactionTable';
 import { TimeframeSelector } from '@/components/TimeframeSelector';
 import { SettingsDialog } from '@/components/SettingsDialog';
-import { NetValueChart } from '@/components/NetValueChart';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -580,10 +579,6 @@ const Index = () => {
             transactionCount={transactions.length}
             borrowedAmount={borrowedAmount}
           />
-        </div>
-
-        <div className="mb-8">
-          <NetValueChart />
         </div>
 
         <div className="mb-8">
