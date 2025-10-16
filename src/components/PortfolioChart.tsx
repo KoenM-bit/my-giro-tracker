@@ -15,9 +15,10 @@ interface PortfolioChartProps {
   currentTotalPL?: number;
   transactions: DeGiroTransaction[];
   accountActivities: AccountActivity[];
+  portfolioSize: number;
 }
 
-export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities }: PortfolioChartProps) => {
+export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, accountActivities, portfolioSize }: PortfolioChartProps) => {
   const formatDate = (date: Date) => {
     if (!date || isNaN(date.getTime())) {
       return "Invalid Date";
@@ -66,11 +67,12 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
   const monthlyData = calculateMonthlyReturns(transactions, accountActivities);
 
   // Cumulative returns data
-  const cumulativeData = calculateCumulativeReturns(transactions, accountActivities)
+  const cumulativeData = calculateCumulativeReturns(transactions, accountActivities, portfolioSize)
     .filter((item) => item.date && !isNaN(item.date.getTime()))
     .map((item) => ({
       date: formatDate(item.date),
       percentage: item.percentage,
+      value: item.value,
     }));
 
   return (
@@ -148,7 +150,9 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
         </TabsContent>
 
         <TabsContent value="cumulative">
-          <h3 className="text-lg font-semibold mb-4">Cumulative Returns (%)</h3>
+          <h3 className="text-lg font-semibold mb-4">
+            Portfolio Performance (Base: {formatCurrency(portfolioSize)})
+          </h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={cumulativeData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -160,7 +164,11 @@ export const PortfolioChart = ({ data, timeframe, currentTotalPL, transactions, 
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "0.5rem",
                 }}
-                formatter={(value: number) => [formatPercentage(value), "Return"]}
+                formatter={(value: number, name: string) => {
+                  if (name === "percentage") return [formatPercentage(value), "Return %"];
+                  return [formatCurrency(value as number), "P/L"];
+                }}
+                labelFormatter={(label) => `Date: ${label}`}
               />
               <Line type="monotone" dataKey="percentage" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
             </LineChart>

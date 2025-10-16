@@ -393,22 +393,14 @@ export const calculateYTDPerformance = (
 
 export const calculateCumulativeReturns = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
-): Array<{ date: Date; percentage: number }> => {
+  accountActivities: AccountActivity[] = [],
+  portfolioSize: number = 50000
+): Array<{ date: Date; percentage: number; value: number }> => {
   const snapshots = calculatePortfolioOverTime(transactions, accountActivities);
-  
-  // Calculate total deposits
-  let totalDeposits = 0;
-  accountActivities.forEach(activity => {
-    if (activity.omschrijving.toLowerCase().includes('ideal')) {
-      totalDeposits += activity.mutatie;
-    }
-  });
-  
-  if (totalDeposits === 0) totalDeposits = 1; // Avoid division by zero
   
   return snapshots.map(snapshot => ({
     date: snapshot.date,
-    percentage: ((snapshot.value / totalDeposits) - 1) * 100,
+    value: snapshot.value,
+    percentage: (snapshot.value / portfolioSize) * 100,
   }));
 };

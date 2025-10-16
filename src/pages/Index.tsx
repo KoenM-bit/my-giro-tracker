@@ -6,6 +6,7 @@ import { PortfolioChart } from '@/components/PortfolioChart';
 import { HoldingsTable } from '@/components/HoldingsTable';
 import { TransactionTable } from '@/components/TransactionTable';
 import { TimeframeSelector } from '@/components/TimeframeSelector';
+import { SettingsDialog } from '@/components/SettingsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DeGiroTransaction, AccountActivity } from '@/types/transaction';
@@ -31,6 +32,7 @@ const Index = () => {
   const [timeframe, setTimeframe] = useState('ALL');
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
   const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
+  const [portfolioSize, setPortfolioSize] = useState(50000);
 
   useEffect(() => {
     // Check authentication
@@ -354,6 +356,10 @@ const Index = () => {
             </div>
             
             <div className="flex gap-2">
+              <SettingsDialog 
+                portfolioSize={portfolioSize}
+                onPortfolioSizeChange={setPortfolioSize}
+              />
               <Button onClick={handleLogout} variant="outline" size="sm">
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -406,6 +412,7 @@ const Index = () => {
             currentTotalPL={totalPL}
             transactions={transactions}
             accountActivities={accountActivities}
+            portfolioSize={portfolioSize}
           />
         </div>
 
