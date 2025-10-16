@@ -34,6 +34,29 @@ function extractTicker(product: string): string | null {
   return null;
 }
 
+// Get exchange suffix from ISIN country code
+function getExchangeSuffix(isin: string): string {
+  const countryCode = isin.substring(0, 2);
+  
+  const exchangeMap: Record<string, string> = {
+    'NL': '.AS',  // Netherlands -> Amsterdam
+    'FR': '.PA',  // France -> Paris
+    'DE': '.DE',  // Germany -> XETRA
+    'GB': '.L',   // UK -> London
+    'IT': '.MI',  // Italy -> Milan
+    'ES': '.MC',  // Spain -> Madrid
+    'BE': '.BR',  // Belgium -> Brussels
+    'CH': '.SW',  // Switzerland -> Swiss Exchange
+    'SE': '.ST',  // Sweden -> Stockholm
+    'DK': '.CO',  // Denmark -> Copenhagen
+    'NO': '.OL',  // Norway -> Oslo
+    'FI': '.HE',  // Finland -> Helsinki
+    'US': '',     // US stocks don't need suffix
+  };
+  
+  return exchangeMap[countryCode] || '';
+}
+
 // Convert ISIN to ticker using OpenFIGI API (free, no auth required)
 async function isinToTicker(isin: string): Promise<string | null> {
   try {
@@ -50,7 +73,9 @@ async function isinToTicker(isin: string): Promise<string | null> {
     
     const data = await response.json();
     if (data[0]?.data?.[0]?.ticker) {
-      return data[0].data[0].ticker;
+      const ticker = data[0].data[0].ticker;
+      const suffix = getExchangeSuffix(isin);
+      return ticker + suffix;
     }
   } catch (error) {
     console.error(`Error converting ISIN ${isin}:`, error);
