@@ -143,11 +143,15 @@ export const calculateProfitLossByType = (transactions: DeGiroTransaction[]): {
         stocksRealized += holding.netCashFlow;
       }
     } else {
-      // Open position = show as positive value (current investment/holdings value)
-      // Since netCashFlow is negative for purchases, we negate it to show as positive asset value
+      // Open position
       if (holding.isOption) {
-        optionsUnrealized += -holding.netCashFlow;
+        // For options: netCashFlow is already correct
+        // - Sold options (short): positive netCashFlow = positive unrealized P/L
+        // - Bought options (long): negative netCashFlow = negative unrealized P/L
+        optionsUnrealized += holding.netCashFlow;
       } else {
+        // For stocks: negate netCashFlow to show current investment as positive value
+        // - Bought stocks: negative netCashFlow becomes positive holdings value
         stocksUnrealized += -holding.netCashFlow;
       }
     }
