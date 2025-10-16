@@ -51,8 +51,8 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
   const underlyingStock = useMemo(() => {
     const optionHolding = holdings.find(h => h.product.match(/(\d{2}[A-Z]{3}\d{2})/));
     if (optionHolding) {
-      // Extract stock symbol from option name (e.g., "CALL TSLA 21NOV25 350" -> "TSLA")
-      const match = optionHolding.product.match(/(?:CALL|PUT)\s+([A-Z]+)/i);
+      // Extract stock symbol from option name (e.g., "AH C35.00 21NOV25" -> "AH")
+      const match = optionHolding.product.match(/^([A-Z]+)\s+[CP]/i);
       return match ? match[1] : null;
     }
     return null;
@@ -103,26 +103,32 @@ export const ScenarioAnalysis = ({ holdings }: ScenarioAnalysisProps) => {
 
       if (holdingExpiration === selectedExpiration) {
         // This is an option expiring on the selected date
-        const optionMatch = holding.product.match(/(CALL|PUT)\s+[A-Z]+\s+\d{2}[A-Z]{3}\d{2}\s+([\d.]+)/i);
+        // Match format: "AH C35.00 21NOV25" or "AH P35.00 21NOV25"
+        const optionMatch = holding.product.match(/([A-Z]+)\s+([CP])([\d.]+)\s+\d{2}[A-Z]{3}\d{2}/i);
         if (optionMatch) {
-          const optionType = optionMatch[1].toUpperCase();
-          const strikePrice = parseFloat(optionMatch[2]);
+          const optionType = optionMatch[2].toUpperCase() === 'C' ? 'CALL' : 'PUT';
+          const strikePrice = parseFloat(optionMatch[3]);
           
-          // Calculate intrinsic value at expiration
-          let expirationValue = 0;
+          // Calculate intrinsic value PER SHARE at expiration
+          let intrinsicValuePerShare = 0;
           if (optionType === 'CALL') {
-            // Call option: max(stock price - strike, 0) per share
-            expirationValue = Math.max(hypotheticalPrice - strikePrice, 0) * holding.quantity * 100;
+            intrinsicValuePerShare = Math.max(hypotheticalPrice - strikePrice, 0);
           } else if (optionType === 'PUT') {
-            // Put option: max(strike - stock price, 0) per share
-            expirationValue = Math.max(strikePrice - hypotheticalPrice, 0) * holding.quantity * 100;
+            intrinsicValuePerShare = Math.max(strikePrice - hypotheticalPrice, 0);
           }
+          
+          // Expiration value = intrinsic value * contracts * 100 shares per contract
+          // For SHORT positions (negative quantity), this will be negative when ITM
+          const expirationValue = intrinsicValuePerShare * holding.quantity * 100;
 
           // Current market value of the option position
+          // For SHORT positions (negative quantity), this will be negative
           const currentPrice = holding.currentPrice || 0;
           const currentValue = currentPrice * holding.quantity * 100;
           
           // Change in option value from now to expiration
+          // For short positions: if options expire worthless (expValue=0), and currentValue=-3640,
+          // then change = 0 - (-3640) = +3640 (profit!)
           const change = expirationValue - currentValue;
           
           optionsExpirationValue += expirationValue;
