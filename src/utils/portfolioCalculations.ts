@@ -10,7 +10,7 @@ export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioH
 
     if (existing) {
       const newQuantity = existing.quantity + transaction.aantal;
-      const newTotalCost = existing.totalCost + Math.abs(transaction.totaal);
+      const newTotalCost = existing.totalCost + Math.abs(transaction.waarde);
       
       holdingsMap.set(key, {
         ...existing,
@@ -25,7 +25,7 @@ export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioH
         quantity: transaction.aantal,
         averagePrice: Math.abs(transaction.koers),
         totalValue: 0,
-        totalCost: Math.abs(transaction.totaal),
+        totalCost: Math.abs(transaction.waarde),
         profitLoss: 0,
         profitLossPercentage: 0,
       });
@@ -36,7 +36,7 @@ export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioH
 };
 
 export const calculatePortfolioValue = (transactions: DeGiroTransaction[]): number => {
-  return transactions.reduce((sum, t) => sum + t.totaal, 0);
+  return transactions.reduce((sum, t) => sum + t.waarde, 0);
 };
 
 export const calculatePortfolioOverTime = (transactions: DeGiroTransaction[]): PortfolioSnapshot[] => {
@@ -50,7 +50,7 @@ export const calculatePortfolioOverTime = (transactions: DeGiroTransaction[]): P
   let runningTotal = 0;
 
   sortedTransactions.forEach((transaction) => {
-    runningTotal += transaction.totaal;
+    runningTotal += transaction.waarde;
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
     
     // Only add valid dates
