@@ -51,3 +51,13 @@ export interface AccountActivity {
   saldoCurrency: string;
   orderId: string;
 }
+
+export interface PriceHistory {
+  id: string;
+  user_id: string;
+  isin: string;
+  product: string;
+  price: number;
+  timestamp: string;
+  created_at: string;
+}

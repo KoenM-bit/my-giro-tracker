@@ -98,6 +98,36 @@ export type Database = {
         }
         Relationships: []
       }
+      price_history: {
+        Row: {
+          created_at: string
+          id: string
+          isin: string
+          price: number
+          product: string
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          isin: string
+          price: number
+          product: string
+          timestamp?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          isin?: string
+          price?: number
+          product?: string
+          timestamp?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           aantal: number

@@ -9,7 +9,7 @@ import { TimeframeSelector } from '@/components/TimeframeSelector';
 import { SettingsDialog } from '@/components/SettingsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { DeGiroTransaction, AccountActivity } from '@/types/transaction';
+import { DeGiroTransaction, AccountActivity, PriceHistory } from '@/types/transaction';
 import { parseDeGiroCSV, parseAccountActivityCSV } from '@/utils/csvParser';
 import {
   calculateHoldings,
@@ -29,6 +29,7 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<DeGiroTransaction[]>([]);
   const [accountActivities, setAccountActivities] = useState<AccountActivity[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
   const [timeframe, setTimeframe] = useState('ALL');
   const [excludedHoldings, setExcludedHoldings] = useState<Set<string>>(new Set());
   const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
@@ -142,6 +143,28 @@ const Index = () => {
         });
         setCurrentPrices(pricesMap);
       }
+
+      // Load price history
+      const { data: historyData, error: historyError } = await supabase
+        .from('price_history')
+        .select('*')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: true });
+
+      if (historyError) throw historyError;
+
+      if (historyData) {
+        const mappedHistory: PriceHistory[] = historyData.map(h => ({
+          id: h.id,
+          user_id: h.user_id,
+          isin: h.isin,
+          product: h.product,
+          price: Number(h.price),
+          timestamp: h.timestamp,
+          created_at: h.created_at,
+        }));
+        setPriceHistory(mappedHistory);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Failed to load data from database');
@@ -253,10 +276,23 @@ const Index = () => {
   const handlePriceUpdate = async (isin: string, product: string, price: number) => {
     setCurrentPrices(prev => new Map(prev).set(isin, price));
     
-    // Save to database
+    // Save to database - both history and current price
     if (user) {
       try {
-        const { error } = await supabase
+        // Insert into price history for tracking
+        const { error: historyError } = await supabase
+          .from('price_history')
+          .insert({
+            user_id: user.id,
+            isin: isin,
+            product: product,
+            price: price,
+          });
+
+        if (historyError) throw historyError;
+
+        // Update current price for quick lookup
+        const { error: currentError } = await supabase
           .from('current_prices')
           .upsert({
             user_id: user.id,
@@ -266,8 +302,29 @@ const Index = () => {
             onConflict: 'user_id,isin'
           });
 
-        if (error) throw error;
-        toast.success('Price saved');
+        if (currentError) throw currentError;
+
+        // Reload price history to update charts
+        const { data: historyData } = await supabase
+          .from('price_history')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('timestamp', { ascending: true });
+
+        if (historyData) {
+          const mappedHistory: PriceHistory[] = historyData.map(h => ({
+            id: h.id,
+            user_id: h.user_id,
+            isin: h.isin,
+            product: h.product,
+            price: Number(h.price),
+            timestamp: h.timestamp,
+            created_at: h.created_at,
+          }));
+          setPriceHistory(mappedHistory);
+        }
+
+        toast.success('Price saved and tracked');
       } catch (error) {
         console.error('Error saving price:', error);
         toast.error('Failed to save price');
@@ -284,7 +341,7 @@ const Index = () => {
   });
   const holdings = allHoldings.filter(h => !excludedHoldings.has(`${h.isin}-${h.product}`));
   const totalCosts = calculateTotalCosts(transactions);
-  const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities);
+  const portfolioSnapshots = calculatePortfolioOverTime(filteredTransactions, accountActivities, priceHistory, currentPrices);
   const { 
     optionsPL, 
     stocksPL,

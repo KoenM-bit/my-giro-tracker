@@ -1,4 +1,4 @@
-import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot, AccountActivity } from '@/types/transaction';
+import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot, AccountActivity, PriceHistory } from '@/types/transaction';
 import { parse, format } from 'date-fns';
 
 export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioHolding[] => {
@@ -41,15 +41,33 @@ export const calculatePortfolioValue = (transactions: DeGiroTransaction[]): numb
 
 export const calculatePortfolioOverTime = (
   transactions: DeGiroTransaction[],
-  accountActivities: AccountActivity[] = []
+  accountActivities: AccountActivity[] = [],
+  priceHistory: PriceHistory[] = [],
+  currentPrices: Map<string, number> = new Map()
 ): PortfolioSnapshot[] => {
   // Track holdings to identify when positions are closed and realize P/L
-  const holdingsMap = new Map<string, { totalCost: number; quantity: number }>();
+  const holdingsMap = new Map<string, { totalCost: number; quantity: number; isin: string; product: string; isOption: boolean }>();
   const snapshots: PortfolioSnapshot[] = [];
-  let portfolioValue = 0; // Track deposits + realized P/L only
+  let realizedValue = 0; // Track deposits + realized P/L only
+  
+  // Helper to calculate unrealized value at a given time with specific prices
+  const calculateUnrealizedValue = (prices: Map<string, number>) => {
+    let unrealized = 0;
+    holdingsMap.forEach((holding) => {
+      if (holding.quantity !== 0) {
+        const currentPrice = prices.get(holding.isin);
+        if (currentPrice !== undefined) {
+          const avgPrice = Math.abs(holding.totalCost / holding.quantity);
+          const multiplier = holding.isOption ? 100 : 1;
+          unrealized += (currentPrice - avgPrice) * holding.quantity * multiplier;
+        }
+      }
+    });
+    return unrealized;
+  };
   
   // Combine all events
-  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit'; data: any }> = [];
+  const allEvents: Array<{ date: Date; type: 'transaction' | 'deposit' | 'price_update'; data: any }> = [];
   
   transactions.forEach((transaction) => {
     const date = parse(`${transaction.datum} ${transaction.tijd}`, 'dd-MM-yyyy HH:mm', new Date());
@@ -65,16 +83,32 @@ export const calculatePortfolioOverTime = (
     }
   });
   
+  priceHistory.forEach((priceUpdate) => {
+    const date = new Date(priceUpdate.timestamp);
+    if (!isNaN(date.getTime())) {
+      allEvents.push({ date, type: 'price_update', data: priceUpdate });
+    }
+  });
+  
   allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
+  
+  // Track prices as they change over time
+  const historicalPrices = new Map<string, number>();
   
   allEvents.forEach((event) => {
     if (event.type === 'deposit') {
-      // Deposits add to portfolio value
-      portfolioValue += event.data.mutatie;
+      // Deposits add to realized value
+      realizedValue += event.data.mutatie;
+    } else if (event.type === 'price_update') {
+      // Update the historical price for this security
+      const priceUpdate = event.data as PriceHistory;
+      historicalPrices.set(priceUpdate.isin, priceUpdate.price);
     } else {
-      // Transaction - only affects portfolio value when position closes (realizes P/L)
+      // Transaction - only affects realized value when position closes
       const transaction = event.data as DeGiroTransaction;
       const key = `${transaction.isin}-${transaction.product}`;
+      const optionPattern = /[CP]\d{2,}/;
+      const isOption = optionPattern.test(transaction.product);
       const existing = holdingsMap.get(key);
       
       if (existing) {
@@ -83,9 +117,8 @@ export const calculatePortfolioOverTime = (
         
         if (newQuantity === 0) {
           // Position fully closed - realize P/L
-          // Realized P/L = what we got out - what we put in
           const realizedPL = existing.totalCost + transaction.waarde;
-          portfolioValue += realizedPL;
+          realizedValue += realizedPL;
           holdingsMap.delete(key);
         } else if (Math.sign(existing.quantity) !== Math.sign(newQuantity) && newQuantity !== 0) {
           // Partial close - realize P/L on closed portion
@@ -96,18 +129,20 @@ export const calculatePortfolioOverTime = (
           const closedCost = -avgCost * closedQuantity;
           const closedSale = (transaction.waarde / Math.abs(transaction.aantal)) * closedQuantity;
           const realizedPL = closedCost + closedSale;
-          portfolioValue += realizedPL;
+          realizedValue += realizedPL;
           
           // Update remaining position
           const remainingQuantity = existing.quantity + transaction.aantal;
           const remainingCost = existing.totalCost - closedCost;
           holdingsMap.set(key, {
+            ...existing,
             totalCost: remainingCost,
             quantity: remainingQuantity,
           });
         } else {
           // Adding to position - no realized P/L
           holdingsMap.set(key, {
+            ...existing,
             totalCost: existing.totalCost + transaction.waarde,
             quantity: newQuantity,
           });
@@ -117,15 +152,35 @@ export const calculatePortfolioOverTime = (
         holdingsMap.set(key, {
           totalCost: transaction.waarde,
           quantity: transaction.aantal,
+          isin: transaction.isin,
+          product: transaction.product,
+          isOption,
         });
       }
     }
     
+    // Calculate total portfolio value = realized + unrealized
+    const unrealizedValue = calculateUnrealizedValue(historicalPrices);
     snapshots.push({
       date: event.date,
-      value: portfolioValue,
+      value: realizedValue + unrealizedValue,
     });
   });
+  
+  // If we have current prices but no recent price history events, add a final snapshot
+  if (currentPrices.size > 0 && snapshots.length > 0) {
+    const lastSnapshot = snapshots[snapshots.length - 1];
+    const unrealizedValue = calculateUnrealizedValue(currentPrices);
+    const currentValue = realizedValue + unrealizedValue;
+    
+    // Only add if the value is different
+    if (Math.abs(currentValue - lastSnapshot.value) > 0.01) {
+      snapshots.push({
+        date: new Date(),
+        value: currentValue,
+      });
+    }
+  }
   
   return snapshots;
 };
