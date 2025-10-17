@@ -126,20 +126,55 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   try {
     const response = await fetch(option.url, { headers: HEADERS });
     if (!response.ok) {
-      console.warn(`Failed to fetch live page for ${option.issueId}`);
+      console.warn(`Failed to fetch price for ${option.issueId}: ${response.status}`);
       return null;
     }
+
     const html = await response.text();
     const doc = new DOMParser().parseFromString(html, "text/html");
     if (!doc) return null;
+
+    // Zoek de tabelrij die deze optie representeert
+    const rows = doc.querySelectorAll("tr");
+    for (const row of rows) {
+      const link = (row as Element).querySelector(`a.optionlink.${option.type}`);
+      if (!link) continue;
+      const href = link.getAttribute("href") ?? "";
+      if (!href.includes(option.issueId)) continue;
+
+      // pak bid/ask kolommen
+      const bidSelector = option.type === "Call" ? ".optiontable__bidcall" : ".optiontable__bid";
+      const askSelector = option.type === "Call" ? ".optiontable__askcall" : ".optiontable__askput";
+
+      const bidText = (row as Element).querySelector(bidSelector)?.textContent?.trim().replace(",", ".") ?? "";
+      const askText = (row as Element).querySelector(askSelector)?.textContent?.trim().replace(",", ".") ?? "";
+
+      const bid = parseFloat(bidText);
+      const ask = parseFloat(askText);
+
+      if (!isNaN(bid) && !isNaN(ask)) {
+        const mid = (bid + ask) / 2;
+        console.log(`📈 ${option.type} ${option.strike} -> Bid=${bid}, Ask=${ask}, Mid=${mid}`);
+        return mid;
+      } else {
+        console.warn(`⚠️ Missing bid/ask for ${option.issueId}, falling back to last price`);
+      }
+    }
+
+    // Fallback: probeer "last price" span
     const el = doc.querySelector(`span[id="${option.issueId}LastPrice"]`);
-    if (!el?.textContent) return null;
-    const price = parseEUFloat(el.textContent.trim());
-    if (price == null) return null;
-    console.log(`Fetched live price for ${option.issueId}: ${price}`);
-    return price;
-  } catch (e) {
-    console.error("getLivePrice error:", e);
+    if (el?.textContent) {
+      const priceText = el.textContent.trim().replace(",", ".");
+      const price = parseFloat(priceText);
+      if (!isNaN(price)) {
+        console.log(`Fallback last price for ${option.issueId}: ${price}`);
+        return price;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.error(`Error in getLivePrice(${option.issueId}):`, err);
     return null;
   }
 }
