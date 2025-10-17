@@ -21,8 +21,6 @@ interface ScrapedOption {
   strike: string;
   issueId: string;
   url: string;
-  bid: number | null;
-  ask: number | null;
 }
 
 // ---------- helpers ----------
@@ -30,13 +28,6 @@ function cleanHref(href: string): string {
   const normalized = href.replace(/\.\.\/\.\.\//g, "/");
   const url = new URL(normalized, BASE_URL);
   return url.toString();
-}
-
-function parseEUFloat(str: string | null): number | null {
-  if (!str) return null;
-  const cleaned = str.replace(/\./g, "").replace(",", ".");
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
 }
 
 function normalizeProductString(s: string): string {
@@ -63,6 +54,7 @@ const monthMap: Record<string, string> = {
   DEC: "December",
 };
 
+// ---------- scrape option chain ----------
 async function fetchOptionChain(): Promise<ScrapedOption[]> {
   try {
     const url = `${BASE_URL}/Aandeel-Koers/11755/Ahold-Delhaize-Koninklijke/opties-expiratiedatum.aspx`;
@@ -81,11 +73,6 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
         const strike = (row as Element).querySelector(".optiontable__focus")?.textContent?.trim().split(/\s+/)[0] ?? "";
         if (!strike) continue;
 
-        const bidCall = (row as Element).querySelector(".optiontable__bidcall")?.textContent?.trim() ?? "";
-        const askCall = (row as Element).querySelector(".optiontable__askcall")?.textContent?.trim() ?? "";
-        const bidPut = (row as Element).querySelector(".optiontable__bid")?.textContent?.trim() ?? "";
-        const askPut = (row as Element).querySelector(".optiontable__askput")?.textContent?.trim() ?? "";
-
         for (const optType of ["Call", "Put"]) {
           const link = (row as Element).querySelector(`a.optionlink.${optType}`);
           if (!link) continue;
@@ -96,25 +83,23 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
           const issueId = idMatch ? idMatch[1] : null;
           if (!issueId) continue;
 
-          const bidVal = optType === "Call" ? parseEUFloat(bidCall) : parseEUFloat(bidPut);
-          const askVal = optType === "Call" ? parseEUFloat(askCall) : parseEUFloat(askPut);
-
           options.push({
             type: optType,
             expiry,
             strike,
             issueId,
             url: cleanHref(href),
-            bid: bidVal,
-            ask: askVal,
           });
         }
       }
     }
 
-    console.log("Scraped", options.length, "options total");
-    const expiries = Array.from(new Set(options.map((o) => o.expiry)));
-    console.log("Distinct expiries found:", expiries);
+    console.log("Scraped", options.length, "options");
+    const novOptions = options.filter((o) => o.expiry.includes("November 2025"));
+    if (novOptions.length > 0) {
+      console.log(`Found ${novOptions.length} November 2025 options`);
+    }
+
     return options;
   } catch (err) {
     console.error("fetchOptionChain error:", err);
@@ -122,6 +107,7 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
   }
 }
 
+// ---------- new getLivePrice ----------
 async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   try {
     const response = await fetch(option.url, { headers: HEADERS });
@@ -134,7 +120,7 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
     const doc = new DOMParser().parseFromString(html, "text/html");
     if (!doc) return null;
 
-    // Zoek de tabelrij die deze optie representeert
+    // Zoek tabelrij met deze issueId
     const rows = doc.querySelectorAll("tr");
     for (const row of rows) {
       const link = (row as Element).querySelector(`a.optionlink.${option.type}`);
@@ -142,7 +128,7 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
       const href = link.getAttribute("href") ?? "";
       if (!href.includes(option.issueId)) continue;
 
-      // pak bid/ask kolommen
+      // Haal bid/ask uit de juiste kolommen
       const bidSelector = option.type === "Call" ? ".optiontable__bidcall" : ".optiontable__bid";
       const askSelector = option.type === "Call" ? ".optiontable__askcall" : ".optiontable__askput";
 
@@ -161,7 +147,7 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
       }
     }
 
-    // Fallback: probeer "last price" span
+    // fallback: last price
     const el = doc.querySelector(`span[id="${option.issueId}LastPrice"]`);
     if (el?.textContent) {
       const priceText = el.textContent.trim().replace(",", ".");
@@ -179,21 +165,22 @@ async function getLivePrice(option: ScrapedOption): Promise<number | null> {
   }
 }
 
+// ---------- matchOptionToHolding ----------
 function matchOptionToHolding(holding: OptionHolding) {
   const raw = holding.product ?? "";
   const product = normalizeProductString(raw);
   const upper = product.toUpperCase();
 
   const compact = /^(?:AH|AH9)\s+([CP])\s*([0-9]+(?:[.,][0-9]+)?)\s+([0-9]{1,2})([A-Z]{3})([0-9]{2})$/i;
-
   const long = /AHOLD\s+DELHAIZE\s+(CALL|PUT)\s+([0-9]+(?:[.,][0-9]+)?)\s+([0-9]{2})-([0-9]{2})-([0-9]{4})/i;
-  let type = "",
-    strike = "",
-    expiry = "";
+
+  let type = "";
+  let strike = "";
+  let expiry = "";
 
   let m = upper.match(compact);
   if (m) {
-    const [, typeLetter, strikeRaw, , monAbbr, yy] = m;
+    const [, typeLetter, strikeRaw, day, monAbbr, yy] = m;
     type = typeLetter.toUpperCase() === "C" ? "Call" : "Put";
     strike = strikeRaw.replace(",", ".").replace(".", ",");
     const monthName = monthMap[monAbbr] ?? monAbbr;
@@ -206,6 +193,7 @@ function matchOptionToHolding(holding: OptionHolding) {
     const [, typeWord, strikeRaw, , mm, yyyy] = m;
     type = typeWord[0].toUpperCase() + typeWord.slice(1).toLowerCase();
     strike = strikeRaw.replace(",", ".").replace(".", ",");
+    const monthIdx = parseInt(mm, 10) - 1;
     const months = [
       "Januari",
       "Februari",
@@ -220,104 +208,85 @@ function matchOptionToHolding(holding: OptionHolding) {
       "November",
       "December",
     ];
-    expiry = `${months[parseInt(mm, 10) - 1]} ${yyyy}`;
+    expiry = `${months[monthIdx]} ${yyyy}`;
     return { type, strike, expiry };
   }
 
-  console.warn(`Could not parse option from product: ${raw}`);
   return null;
 }
 
+// ---------- main function ----------
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
   try {
     const body = await req.json();
     const holdings: OptionHolding[] = Array.isArray(body?.holdings) ? body.holdings : [];
-    if (!holdings.length) {
-      return new Response(JSON.stringify({ success: false, error: "No holdings provided" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      });
-    }
+    console.log(`Edge fn fetch-option-prices: received ${holdings.length} holdings`);
 
-    const scraped = await fetchOptionChain();
-
+    const scrapedOptions = await fetchOptionChain();
     const results: any[] = [];
-    function normalizeStrike(s: string) {
-      return parseFloat(s.replace(",", "."));
+
+    function normalizeStrike(strike: string): number {
+      return parseFloat(strike.replace(",", "."));
     }
-    function normalizeExpiry(s: string) {
-      return s
+    function normalizeExpiry(exp: string): string {
+      return exp
         .toLowerCase()
         .replace(/\s*\(.*?\)\s*/g, "")
         .trim();
     }
 
-    for (const h of holdings) {
-      const parsed = matchOptionToHolding(h);
+    for (const holding of holdings) {
+      const parsed = matchOptionToHolding(holding);
       if (!parsed) {
-        results.push({ product: h.product, status: "failed", reason: "parse error" });
+        results.push({ product: holding.product, status: "failed", reason: "parse error" });
         continue;
       }
 
-      const expiryNorm = normalizeExpiry(parsed.expiry);
-      const candidates = scraped.filter((o) => normalizeExpiry(o.expiry) === expiryNorm);
-      const match = candidates.find(
-        (o) => o.type === parsed.type && Math.abs(normalizeStrike(o.strike) - normalizeStrike(parsed.strike)) < 0.001,
-      );
+      const parsedExpiry = normalizeExpiry(parsed.expiry);
+      const candidates = scrapedOptions.filter((o) => normalizeExpiry(o.expiry) === parsedExpiry);
+      const match = candidates.find((opt) => {
+        const sameType = opt.type === parsed.type;
+        const parsedStrikeNum = normalizeStrike(parsed.strike);
+        const optStrikeNum = normalizeStrike(opt.strike);
+        return sameType && Math.abs(optStrikeNum - parsedStrikeNum) < 0.001;
+      });
 
       if (!match) {
-        results.push({ product: h.product, status: "failed", reason: "no match found" });
+        results.push({ product: holding.product, status: "failed", reason: "no match found" });
         continue;
       }
 
-      let final = null;
-      let source = "none";
+      console.log(`✅ Matched ${parsed.type} ${parsed.strike} → issueId ${match.issueId} (${match.expiry})`);
 
-      if (match.bid && match.ask) {
-        final = (match.bid + match.ask) / 2;
-        source = "bid/ask";
-      } else if (match.bid) {
-        final = match.bid;
-        source = "bid";
-      } else if (match.ask) {
-        final = match.ask;
-        source = "ask";
+      const price = await getLivePrice(match);
+      if (price == null) {
+        results.push({ product: holding.product, status: "failed", reason: "no price found" });
+        continue;
       }
 
-      if (!final) {
-        const live = await getLivePrice(match);
-        if (live) {
-          final = live;
-          source = "live";
-        }
-      }
-
-      if (!final) {
-        results.push({ product: h.product, status: "failed", reason: "no price found" });
-      } else {
-        results.push({ product: h.product, status: "success", price: final, source });
-      }
-
-      await new Promise((r) => setTimeout(r, 300));
+      results.push({ product: holding.product, status: "success", price });
+      await new Promise((r) => setTimeout(r, 350));
     }
 
     const summary = {
-      total: holdings.length,
-      success: results.filter((r) => r.status === "success").length,
+      successful: results.filter((r) => r.status === "success").length,
       failed: results.filter((r) => r.status === "failed").length,
       details: results,
     };
 
-    console.log(`✅ Finished fetching: ${summary.success}/${holdings.length} success`);
-    return new Response(JSON.stringify({ success: true, summary }), {
+    return new Response(JSON.stringify({ success: true, summary, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("Function error:", err);
-    return new Response(JSON.stringify({ success: false, error: String(err) }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
+    );
   }
 });
