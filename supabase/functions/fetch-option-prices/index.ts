@@ -86,11 +86,6 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
         const bidPut = (row as Element).querySelector(".optiontable__bid")?.textContent?.trim() ?? "";
         const askPut = (row as Element).querySelector(".optiontable__askput")?.textContent?.trim() ?? "";
 
-        // Log raw bid/ask values for debugging
-        if (strike === "35,000" || strike === "35.00") {
-          console.log(`📊 Strike ${strike} - Raw values: bidCall="${bidCall}", askCall="${askCall}", bidPut="${bidPut}", askPut="${askPut}"`);
-        }
-
         for (const optType of ["Call", "Put"]) {
           const link = (row as Element).querySelector(`a.optionlink.${optType}`);
           if (!link) continue;
@@ -103,11 +98,6 @@ async function fetchOptionChain(): Promise<ScrapedOption[]> {
 
           const bidVal = optType === "Call" ? parseEUFloat(bidCall) : parseEUFloat(bidPut);
           const askVal = optType === "Call" ? parseEUFloat(askCall) : parseEUFloat(askPut);
-
-          // Log parsed bid/ask values for debugging
-          if ((strike === "35,000" || strike === "35.00") && optType === "Call") {
-            console.log(`💰 Parsed Call ${strike} - bid=${bidVal}, ask=${askVal}`);
-          }
 
           options.push({
             type: optType,
@@ -284,29 +274,22 @@ serve(async (req) => {
       let final = null;
       let source = "none";
 
-      console.log(`💵 Match found for ${h.product}: bid=${match.bid}, ask=${match.ask}`);
-
       if (match.bid && match.ask) {
         final = (match.bid + match.ask) / 2;
         source = "bid/ask";
-        console.log(`✅ Using bid/ask mid price: ${final}`);
       } else if (match.bid) {
         final = match.bid;
         source = "bid";
-        console.log(`⚠️ Using bid only: ${final}`);
       } else if (match.ask) {
         final = match.ask;
         source = "ask";
-        console.log(`⚠️ Using ask only: ${final}`);
       }
 
       if (!final) {
-        console.log(`🔍 Bid/ask not available, fetching live price...`);
         const live = await getLivePrice(match);
         if (live) {
           final = live;
           source = "live";
-          console.log(`📍 Using live price: ${final}`);
         }
       }
 
