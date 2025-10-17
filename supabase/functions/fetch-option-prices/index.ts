@@ -270,13 +270,16 @@ serve(async (req) => {
       await new Promise((r) => setTimeout(r, 350));
     }
 
-    const summary = {
-      successful: results.filter((r) => r.status === "success").length,
-      failed: results.filter((r) => r.status === "failed").length,
-      details: results,
-    };
+    const successful = results.filter((r) => r.status === "success").length;
+    const failed = results.filter((r) => r.status === "failed").length;
+    
+    console.log(`✅ Finished fetching: ${successful}/${results.length} success`);
 
-    return new Response(JSON.stringify({ success: true, summary, results }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      summary: { successful, failed, total: results.length },
+      results 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
