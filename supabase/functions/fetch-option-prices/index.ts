@@ -216,17 +216,7 @@ serve(async (req) => {
 
     // --- helpers ---
     function normalizeStrike(strike: string): number {
-      // Remove thousands separators (dots or commas used as thousands) first
-      // Then handle decimal separator (comma or dot)
-      const cleaned = strike.replace(/[.,]/g, (match, offset, str) => {
-        // If it's the last occurrence and there are 2 digits after it, it's a decimal separator
-        const remaining = str.substring(offset + 1);
-        if (remaining.length === 2 && /^\d{2}$/.test(remaining)) {
-          return '.'; // Convert decimal comma to dot
-        }
-        return ''; // Remove thousands separators
-      });
-      return parseFloat(cleaned);
+      return parseFloat(strike.replace(",", "."));
     }
     function normalizeExpiry(exp: string): string {
       return exp
