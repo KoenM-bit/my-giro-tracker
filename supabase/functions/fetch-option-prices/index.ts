@@ -234,15 +234,31 @@ serve(async (req) => {
       }
 
       const parsedExpiry = normalizeExpiry(parsed.expiry);
-      const candidates = scrapedOptions.filter((o) => normalizeExpiry(o.expiry) === parsedExpiry);
+      console.log(`🔍 Parsed holding: ${holding.product}`);
+      console.log(`   Type: ${parsed.type}, Strike: ${parsed.strike}, Expiry: ${parsed.expiry}`);
+      console.log(`   Normalized expiry: "${parsedExpiry}"`);
+      
+      const candidates = scrapedOptions.filter((o) => {
+        const normalized = normalizeExpiry(o.expiry);
+        console.log(`   Comparing "${normalized}" === "${parsedExpiry}": ${normalized === parsedExpiry}`);
+        return normalized === parsedExpiry;
+      });
 
-      console.log(
-        `Looking for: ${parsed.type} ${parsed.strike} ${parsed.expiry} — ${candidates.length} candidates found`,
-      );
+      console.log(`   Found ${candidates.length} candidates with matching expiry`);
+      if (candidates.length > 0) {
+        console.log(`   Sample candidates:`, JSON.stringify(candidates.slice(0, 3)));
+      }
 
       const match = candidates.find((opt) => {
         const sameType = opt.type === parsed.type;
-        const strikeDiff = Math.abs(normalizeStrike(opt.strike) - normalizeStrike(parsed.strike));
+        const parsedStrikeNum = normalizeStrike(parsed.strike);
+        const optStrikeNum = normalizeStrike(opt.strike);
+        const strikeDiff = Math.abs(optStrikeNum - parsedStrikeNum);
+        
+        console.log(`   Checking option: type=${opt.type}, strike=${opt.strike} (${optStrikeNum})`);
+        console.log(`   vs parsed: type=${parsed.type}, strike=${parsed.strike} (${parsedStrikeNum})`);
+        console.log(`   Type match: ${sameType}, Strike diff: ${strikeDiff}`);
+        
         return sameType && strikeDiff < 0.001;
       });
 
@@ -250,7 +266,8 @@ serve(async (req) => {
         console.warn(
           `❌ No match found on beursduivel for ${holding.product} -> {${parsed.type} ${parsed.strike} ${parsed.expiry}}`,
         );
-        console.warn(`Closest candidates for ${parsed.expiry}:`, JSON.stringify(candidates.slice(0, 10)));
+        const allNovOptions = scrapedOptions.filter(o => o.expiry.includes("November"));
+        console.warn(`Available November options:`, JSON.stringify(allNovOptions.slice(0, 10)));
         results.push({ product: holding.product, status: "failed", reason: "no match found" });
         continue;
       }
