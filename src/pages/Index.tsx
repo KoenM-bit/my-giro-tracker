@@ -447,6 +447,52 @@ const Index = () => {
     }
   };
 
+  const refetchPrices = async () => {
+    if (!user) return;
+    
+    try {
+      // Reload current prices from database
+      const { data: pricesData, error: pricesError } = await supabase
+        .from('current_prices')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (pricesError) throw pricesError;
+
+      if (pricesData) {
+        const pricesMap = new Map<string, number>();
+        pricesData.forEach(p => {
+          pricesMap.set(p.isin, Number(p.current_price));
+        });
+        setCurrentPrices(pricesMap);
+      }
+
+      // Reload price history to update charts
+      const { data: historyData, error: historyError } = await supabase
+        .from('price_history')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: true });
+
+      if (historyError) throw historyError;
+
+      if (historyData) {
+        const mappedHistory: PriceHistory[] = historyData.map(h => ({
+          id: h.id,
+          user_id: h.user_id,
+          isin: h.isin,
+          product: h.product,
+          price: Number(h.price),
+          timestamp: h.timestamp,
+          created_at: h.created_at,
+        }));
+        setPriceHistory(mappedHistory);
+      }
+    } catch (error) {
+      console.error('Error refetching prices:', error);
+    }
+  };
+
   const savePortfolioSnapshot = async (userId: string) => {
     try {
       // Calculate current portfolio value
@@ -696,6 +742,7 @@ const Index = () => {
               excludedHoldings={excludedHoldings}
               onToggleExclusion={toggleHoldingExclusion}
               onPriceUpdate={handlePriceUpdate}
+              onRefetchPrices={refetchPrices}
             />
             <TransactionTable transactions={stockTransactions} />
           </TabsContent>
@@ -707,6 +754,7 @@ const Index = () => {
               excludedHoldings={excludedHoldings}
               onToggleExclusion={toggleHoldingExclusion}
               onPriceUpdate={handlePriceUpdate}
+              onRefetchPrices={refetchPrices}
             />
             <TransactionTable transactions={optionTransactions} />
           </TabsContent>

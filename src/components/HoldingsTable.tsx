@@ -17,9 +17,10 @@ interface HoldingsTableProps {
   excludedHoldings: Set<string>;
   onToggleExclusion: (key: string) => void;
   onPriceUpdate?: (isin: string, product: string, price: number) => void;
+  onRefetchPrices?: () => Promise<void>;
 }
 
-export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggleExclusion, onPriceUpdate }: HoldingsTableProps) => {
+export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggleExclusion, onPriceUpdate, onRefetchPrices }: HoldingsTableProps) => {
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string>('');
   const [scenarioOpen, setScenarioOpen] = useState(false);
@@ -79,89 +80,72 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
     setScenarioOpen(true);
   };
 
-  const handleFetchPrices = async () => {
+  const handleFetchAllPrices = async () => {
     setIsFetchingPrices(true);
     
     try {
-      // Only fetch for stocks (not options)
       const stockHoldings = holdings.filter(h => isStock(h.product));
+      const optionHoldings = holdings.filter(h => !isStock(h.product));
       
-      if (stockHoldings.length === 0) {
-        toast.info('No stocks to fetch prices for');
+      if (stockHoldings.length === 0 && optionHoldings.length === 0) {
+        toast.info('No holdings to fetch prices for');
         setIsFetchingPrices(false);
         return;
       }
 
-      toast.info(`Fetching prices for ${stockHoldings.length} stocks...`);
+      const totalHoldings = stockHoldings.length + optionHoldings.length;
+      toast.info(`Fetching prices for ${totalHoldings} holdings...`);
 
-      const { data, error } = await supabase.functions.invoke('fetch-stock-prices', {
-        body: {
-          holdings: stockHoldings.map(h => ({
-            isin: h.isin,
-            product: h.product
-          }))
+      let totalSuccessful = 0;
+      let totalFailed = 0;
+
+      // Fetch stock prices
+      if (stockHoldings.length > 0) {
+        const { data: stockData, error: stockError } = await supabase.functions.invoke('fetch-stock-prices', {
+          body: {
+            holdings: stockHoldings.map(h => ({
+              isin: h.isin,
+              product: h.product
+            }))
+          }
+        });
+
+        if (!stockError && stockData?.success) {
+          totalSuccessful += stockData.summary.successful || 0;
+          totalFailed += stockData.summary.failed || 0;
         }
-      });
+      }
 
-      if (error) throw error;
+      // Fetch option prices
+      if (optionHoldings.length > 0) {
+        const { data: optionData, error: optionError } = await supabase.functions.invoke('fetch-option-prices', {
+          body: {
+            holdings: optionHoldings.map(h => ({
+              isin: h.isin,
+              product: h.product
+            }))
+          }
+        });
 
-      if (data?.success) {
-        const { summary } = data;
-        if (summary.successful > 0) {
-          toast.success(`Updated ${summary.successful} prices successfully!`);
-          // Trigger a page refresh to show new prices
-          window.location.reload();
-        } else {
-          toast.warning('No prices could be fetched');
+        if (!optionError && optionData?.success) {
+          totalSuccessful += optionData.summary.successful || 0;
+          totalFailed += optionData.summary.failed || 0;
         }
+      }
+
+      // Reload prices from database
+      if (onRefetchPrices) {
+        await onRefetchPrices();
+      }
+
+      if (totalSuccessful > 0) {
+        toast.success(`Updated ${totalSuccessful} of ${totalHoldings} prices successfully!`);
+      } else {
+        toast.warning('No prices could be fetched');
       }
     } catch (error) {
       console.error('Error fetching prices:', error);
       toast.error('Failed to fetch prices');
-    } finally {
-      setIsFetchingPrices(false);
-    }
-  };
-
-  const handleFetchOptionPrices = async () => {
-    setIsFetchingPrices(true);
-    
-    try {
-      // Only fetch for options (not stocks)
-      const optionHoldings = holdings.filter(h => !isStock(h.product));
-      
-      if (optionHoldings.length === 0) {
-        toast.info('No options to fetch prices for');
-        setIsFetchingPrices(false);
-        return;
-      }
-
-      toast.info(`Fetching prices for ${optionHoldings.length} options...`);
-
-      const { data, error } = await supabase.functions.invoke('fetch-option-prices', {
-        body: {
-          holdings: optionHoldings.map(h => ({
-            isin: h.isin,
-            product: h.product
-          }))
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        const { summary } = data;
-        if (summary.successful > 0) {
-          toast.success(`Updated ${summary.successful} option prices successfully!`);
-          // Trigger a page refresh to show new prices
-          window.location.reload();
-        } else {
-          toast.warning('No option prices could be fetched');
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching option prices:', error);
-      toast.error('Failed to fetch option prices');
     } finally {
       setIsFetchingPrices(false);
     }
@@ -185,29 +169,7 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-semibold">Current Holdings</h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleFetchPrices}
-            disabled={isFetchingPrices}
-            className="gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetchingPrices ? 'animate-spin' : ''}`} />
-            {isFetchingPrices ? 'Fetching...' : 'Fetch Stock Prices'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleFetchOptionPrices}
-            disabled={isFetchingPrices}
-            className="gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetchingPrices ? 'animate-spin' : ''}`} />
-            {isFetchingPrices ? 'Fetching...' : 'Fetch Option Prices'}
-          </Button>
-        </div>
+        <h3 className="text-lg font-semibold">Current Holdings</h3>
         <Badge variant="outline" className="text-xs">
           {holdings.length - excludedHoldings.size} active / {holdings.length} total
         </Badge>
@@ -222,7 +184,21 @@ export const HoldingsTable = ({ holdings, allHoldings, excludedHoldings, onToggl
               <TableHead className="w-16"></TableHead>
               <TableHead className="text-right">Quantity</TableHead>
               <TableHead className="text-right">Avg. Price</TableHead>
-              <TableHead className="text-right">Current Price</TableHead>
+              <TableHead className="text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <span>Current Price</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleFetchAllPrices}
+                    disabled={isFetchingPrices}
+                    className="h-6 w-6 p-0"
+                    title="Refresh all prices"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isFetchingPrices ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+              </TableHead>
               <TableHead className="text-right">Unrealized P/L</TableHead>
               <TableHead className="text-right">Total Cost</TableHead>
             </TableRow>
