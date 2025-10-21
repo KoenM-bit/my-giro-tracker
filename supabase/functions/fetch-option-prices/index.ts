@@ -133,16 +133,26 @@ serve(async (req) => {
       throw new Error("Missing authorization header");
     }
 
+    // Create Supabase client with service role key for database operations
     const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    // Create a separate client with user's auth to verify the user
+    const supabaseAuth = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     if (userError || !user) {
+      console.error("Auth error:", userError);
       throw new Error("Unauthorized");
     }
+
+    console.log(`Authenticated user: ${user.id}`);
 
     const body = await req.json();
     const holdings: OptionHolding[] = Array.isArray(body?.holdings) ? body.holdings : [];
