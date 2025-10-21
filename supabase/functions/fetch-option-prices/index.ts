@@ -1,5 +1,6 @@
 // file: supabase/functions/fetch-option-prices/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -127,6 +128,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("Missing authorization header");
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      throw new Error("Unauthorized");
+    }
+
     const body = await req.json();
     const holdings: OptionHolding[] = Array.isArray(body?.holdings) ? body.holdings : [];
     console.log(`Edge fn fetch-option-prices: received ${holdings.length} holdings`);
@@ -147,6 +164,37 @@ serve(async (req) => {
       if (price == null) {
         results.push({ product: holding.product, status: "failed", reason: "no price found" });
         continue;
+      }
+
+      // Save to current_prices (upsert)
+      const { error: currentPriceError } = await supabaseClient
+        .from("current_prices")
+        .upsert({
+          user_id: user.id,
+          isin: holding.isin,
+          current_price: price,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "user_id,isin"
+        });
+
+      if (currentPriceError) {
+        console.error(`Failed to update current_prices for ${holding.isin}:`, currentPriceError);
+      }
+
+      // Save to price_history
+      const { error: historyError } = await supabaseClient
+        .from("price_history")
+        .insert({
+          user_id: user.id,
+          isin: holding.isin,
+          product: holding.product,
+          price: price,
+          timestamp: new Date().toISOString(),
+        });
+
+      if (historyError) {
+        console.error(`Failed to insert price_history for ${holding.isin}:`, historyError);
       }
 
       results.push({ product: holding.product, status: "success", price });
