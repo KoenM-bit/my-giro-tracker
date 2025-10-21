@@ -128,32 +128,6 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      throw new Error("Missing authorization header");
-    }
-
-    // Create Supabase client with service role key for database operations
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Create a separate client with user's auth to verify the user
-    const supabaseAuth = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-    if (userError || !user) {
-      console.error("Auth error:", userError);
-      throw new Error("Unauthorized");
-    }
-
-    console.log(`Authenticated user: ${user.id}`);
-
     const body = await req.json();
     const holdings: OptionHolding[] = Array.isArray(body?.holdings) ? body.holdings : [];
     console.log(`Edge fn fetch-option-prices: received ${holdings.length} holdings`);
@@ -176,42 +150,74 @@ serve(async (req) => {
         continue;
       }
 
-      // Save to current_prices (upsert)
-      const { error: currentPriceError } = await supabaseClient
+      results.push({ product: holding.product, isin: holding.isin, status: "success", price });
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    // Get auth token from request
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("No authorization header");
+    }
+
+    // Initialize Supabase client with service role key
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    // Get user from JWT token
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      console.error("Auth error:", userError);
+      throw new Error("Invalid authorization token");
+    }
+
+    console.log(`Authenticated user: ${user.id}`);
+
+    // Update database for successful fetches
+    const successfulResults = results.filter(r => r.status === "success");
+    
+    for (const result of successfulResults) {
+      // Update current_prices
+      const { error: upsertError } = await supabase
         .from("current_prices")
         .upsert({
           user_id: user.id,
-          isin: holding.isin,
-          current_price: price,
+          isin: result.isin,
+          current_price: result.price,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: "user_id,isin"
         });
-
-      if (currentPriceError) {
-        console.error(`Failed to update current_prices for ${holding.isin}:`, currentPriceError);
+      
+      if (upsertError) {
+        console.error(`Error updating current_prices for ${result.isin}:`, upsertError);
       }
 
-      // Save to price_history
-      const { error: historyError } = await supabaseClient
+      // Insert into price_history
+      const { error: historyError } = await supabase
         .from("price_history")
         .insert({
           user_id: user.id,
-          isin: holding.isin,
-          product: holding.product,
-          price: price,
+          isin: result.isin,
+          product: result.product,
+          price: result.price,
           timestamp: new Date().toISOString(),
         });
-
+      
       if (historyError) {
-        console.error(`Failed to insert price_history for ${holding.isin}:`, historyError);
+        console.error(`Error inserting price_history for ${result.isin}:`, historyError);
       }
-
-      results.push({ product: holding.product, status: "success", price });
-      await new Promise((r) => setTimeout(r, 200));
     }
 
-    const successful = results.filter((r) => r.status === "success").length;
+    const successful = successfulResults.length;
     const failed = results.filter((r) => r.status === "failed").length;
     
     console.log(`✅ Finished fetching: ${successful}/${results.length} success`);
