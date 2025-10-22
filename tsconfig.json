@@ -7,7 +7,7 @@
       "@/*": ["./src/*"]
     },
     "noImplicitAny": false,
-    "noUnusedParameters": false,
+    "noUnusedParameters": false, 
     "skipLibCheck": true,
     "allowJs": true,
     "noUnusedLocals": false,
