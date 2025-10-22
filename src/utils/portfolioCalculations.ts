@@ -1,6 +1,7 @@
 import { DeGiroTransaction, PortfolioHolding, PortfolioSnapshot, AccountActivity, PriceHistory, Dividend } from '@/types/transaction';
 import { parse, format } from 'date-fns';
 
+// Portfolio calculation utilities for DeGiro transaction analysis
 export const calculateHoldings = (transactions: DeGiroTransaction[]): PortfolioHolding[] => {
   const holdingsMap = new Map<string, PortfolioHolding>();
 
