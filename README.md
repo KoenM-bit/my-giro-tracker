@@ -1,73 +1,146 @@
-# Welcome to your Lovable project
+# 📊 DeGiro Portfolio Tracker
 
-## Project info
+A comprehensive web application for tracking and analyzing your DeGiro trading portfolio performance. Upload your transaction history and account activities to get detailed insights into your investments, including real-time profit/loss analysis, performance charts, and dividend tracking.
 
-**URL**: https://lovable.dev/projects/d038c0b7-e0c7-4b8c-9876-d8ae224b82f3
+## ✨ Features
 
-## How can I edit this code?
+### 📈 Portfolio Analytics
+- **Real-time P&L Tracking**: Separate analysis for stocks and options with realized/unrealized gains
+- **Performance Charts**: Interactive charts showing portfolio value over time with multiple timeframes
+- **Holdings Analysis**: Detailed breakdown of current positions with profit/loss calculations
+- **Scenario Analysis**: Analyze potential outcomes and risk scenarios
 
-There are several ways of editing your application.
+### 📋 Transaction Management
+- **CSV Import**: Easy upload of DeGiro transaction history and account activity files
+- **Transaction Table**: Searchable and filterable transaction history
+- **Cost Analysis**: Track transaction costs and fees
+- **Position Tracking**: Monitor opening and closing of positions
 
-**Use Lovable**
+### 💰 Financial Tracking
+- **Dividend Manager**: Track dividend payments with custom entries
+- **Margin Tracking**: Monitor borrowed amounts and leverage
+- **Monthly/Yearly Returns**: Calculate and visualize returns over different periods
+- **YTD Performance**: Year-to-date performance analysis
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d038c0b7-e0c7-4b8c-9876-d8ae224b82f3) and start prompting.
+### 🎛️ Advanced Features
+- **User Authentication**: Secure login with Supabase authentication
+- **Data Persistence**: Store portfolio snapshots and historical data
+- **Real-time Price Integration**: Fetch current stock and option prices
+- **Multiple Timeframes**: View data across 1M, 3M, 1Y, and ALL time periods
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Tech Stack
 
-**Use your preferred IDE**
+- **Frontend**: React 18 with TypeScript
+- **Styling**: Tailwind CSS with shadcn/ui components
+- **Charts**: Recharts for data visualization
+- **Build Tool**: Vite for fast development and building
+- **Backend**: Supabase for authentication and data storage
+- **Data Processing**: Papa Parse for CSV file handling
+- **Date Handling**: date-fns for date manipulations
+- **Routing**: React Router for navigation
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠️ Installation & Setup
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn package manager
 
-Follow these steps:
+### Local Development
 
+1. **Clone the repository**
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+git clone https://github.com/KoenM-bit/my-giro-tracker.git
+cd my-giro-tracker
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+2. **Install dependencies**
+```sh
+npm install
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+3. **Environment Setup**
+Create a `.env.local` file with your Supabase credentials:
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+4. **Start development server**
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+5. **Open in browser**
+Navigate to `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Production Build
+```sh
+npm run build
+npm run preview
+```
 
-**Use GitHub Codespaces**
+## 📥 Data Import
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Supported File Formats
+- **Transaction History**: DeGiro CSV export files
+- **Account Activities**: DeGiro account activity CSV files
 
-## What technologies are used for this project?
+### How to Export from DeGiro
+1. Log into your DeGiro account
+2. Navigate to "Rapportage" (Reports)
+3. Select "Transacties" (Transactions) for transaction history
+4. Select "Rekeningoverzicht" (Account Overview) for account activities
+5. Choose date range and export as CSV
+6. Upload both files to the application
 
-This project is built with:
+## 🎯 Key Components
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Portfolio Overview
+- Total portfolio value and costs
+- Separate P&L for stocks and options
+- Realized vs unrealized gains/losses
+- Transaction count and borrowing information
 
-## How can I deploy this project?
+### Interactive Charts
+- Portfolio value over time
+- Realized P&L tracking
+- Monthly and yearly return analysis
+- YTD performance metrics
 
-Simply open [Lovable](https://lovable.dev/projects/d038c0b7-e0c7-4b8c-9876-d8ae224b82f3) and click on Share -> Publish.
+### Holdings Table
+- Current positions with live P&L
+- Average cost basis calculation
+- Profit/loss percentages
+- Position sizing information
 
-## Can I connect a custom domain to my Lovable project?
+### Dividend Tracking
+- Manual dividend entry
+- Historical dividend payments
+- Total dividend income calculation
 
-Yes, you can!
+## 🔐 Security & Privacy
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+- Secure authentication with Supabase
+- User data isolation and protection
+- No financial account credentials required
+- Local CSV processing (files not stored on servers)
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## 🐛 Issues & Support
+
+If you encounter any issues or have questions, please file an issue on the [GitHub Issues](https://github.com/KoenM-bit/my-giro-tracker/issues) page.
+
+## 🙏 Acknowledgments
+
+- Built with [Lovable](https://lovable.dev) platform
+- UI components from [shadcn/ui](https://ui.shadcn.com/)
+- Charts powered by [Recharts](https://recharts.org/)
+- Backend infrastructure by [Supabase](https://supabase.com/)
