@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { TrendingUp, LogOut } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
+// Main dashboard component for DeGiro portfolio tracking
 const Index = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+// Authentication page component for user login and registration
 const Auth = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');

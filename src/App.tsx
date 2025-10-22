@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
+// Initialize React Query client for data fetching
 const queryClient = new QueryClient();
 
 const App = () => (

@@ -14,7 +14,7 @@ interface OptionHolding {
   product: string;
 }
 
-// ---------- helpers ----------
+// Helper functions for option price fetching
 function normalizeProductString(s: string): string {
   return s
     .replace(/\u00A0/g, " ")
