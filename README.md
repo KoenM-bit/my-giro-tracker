@@ -145,7 +145,6 @@ If you encounter any issues or have questions, please file an issue on the [GitH
 
 ## 🙏 Acknowledgments
 
-- Built with [Lovable](https://lovable.dev) platform
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
 - Charts powered by [Recharts](https://recharts.org/)
 - Backend infrastructure by [Supabase](https://supabase.com/)
