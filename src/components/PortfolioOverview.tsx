@@ -1,6 +1,7 @@
 import { Card } from './ui/card';
 import { TrendingUp, TrendingDown, Wallet, Receipt, LineChart, Lock, Unlock } from 'lucide-react';
 
+// Portfolio overview component displaying key performance metrics
 interface PortfolioOverviewProps {
   totalValue: number;
   totalCosts: number;

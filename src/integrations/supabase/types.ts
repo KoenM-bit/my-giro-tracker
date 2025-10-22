@@ -1,3 +1,4 @@
+// TypeScript definitions for Supabase database schema
 export type Json =
   | string
   | number
@@ -7,7 +8,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
+  // Database schema types for DeGiro portfolio tracker
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
